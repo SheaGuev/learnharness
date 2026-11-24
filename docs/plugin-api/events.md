@@ -63,6 +63,7 @@ export interface ServerEvents {
         chatId: string;
     };
     "plugins-changed": Record<string, never>;
+    "hub-changed": Record<string, never>;
     "plugin-message": {
         pluginId: string;
         topic: string;
@@ -91,6 +92,7 @@ export interface ServerEvents {
 - ["side-chats-changed"](#serverevents-side-chats-changed)
 - ["side-chats-changed".chatId](#serverevents-side-chats-changedchatid)
 - ["plugins-changed"](#serverevents-plugins-changed)
+- ["hub-changed"](#serverevents-hub-changed)
 - ["plugin-message"](#serverevents-plugin-message)
 - ["plugin-message".pluginId](#serverevents-plugin-messagepluginid)
 - ["plugin-message".topic](#serverevents-plugin-messagetopic)
@@ -245,6 +247,14 @@ Plugin availability/lifecycle changed; refetch installed packages.
 
 ```ts
 "plugins-changed": Record<string, never>;
+```
+
+### ServerEvents "hub-changed"
+
+Learning hub plans, topics, lessons or evidence changed; refetch GET /api/hub.
+
+```ts
+"hub-changed": Record<string, never>;
 ```
 
 ### ServerEvents "plugin-message"

@@ -99,6 +99,11 @@ export const RENDER_SETTINGS_FILE = path.join(/* turbopackIgnore: true */ PATHS.
  *  along unversioned by design (owner ruling). */
 export const GRAPH_FORMAT_FILE = path.join(/* turbopackIgnore: true */ PATHS.graph, "format.json");
 
+/** Learning hub: topics, lessons and plans (versioned JSON) and the append-only learner evidence ledger. */
+export const HUB_DIR = path.join(/* turbopackIgnore: true */ DATA_ROOT, "hub");
+export const HUB_FILE = path.join(/* turbopackIgnore: true */ HUB_DIR, "hub.json");
+export const HUB_EVIDENCE_FILE = path.join(/* turbopackIgnore: true */ HUB_DIR, "evidence.jsonl");
+
 /**
  * THE USER SETTINGS RECORD (settings-storage wave, 2026-09-19): one
  * versioned, DELTA-shaped JSON blob at the data-dir seam holding every

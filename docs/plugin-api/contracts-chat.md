@@ -158,6 +158,7 @@ export interface ChatRecord {
     messages: LhMessage[];
     imageSnapshots?: Record<string, ImageSnapshot>;
     kind?: ChatKind;
+    origin?: SessionOrigin;
     tree?: PlanTree;
     turns?: TurnUsage[];
     extractions?: ExtractionRunUsage[];
@@ -167,7 +168,7 @@ export interface ChatRecord {
 }
 ```
 
-**Related types:** [ChatKind](contracts-chat.md#chatkind), [ChatSettings](contracts-chat.md#chatsettings), [ExtractionRunUsage](contracts-chat.md#extractionrunusage), [ImageSnapshot](contracts-chat.md#imagesnapshot), [LhMessage](native-messages.md#lhmessage), [PlanTree](contracts-plan.md#plantree), [SideChatThread](contracts-chat.md#sidechatthread), [TurnUsage](contracts-chat.md#turnusage).
+**Related types:** [ChatKind](contracts-chat.md#chatkind), [ChatSettings](contracts-chat.md#chatsettings), [ExtractionRunUsage](contracts-chat.md#extractionrunusage), [ImageSnapshot](contracts-chat.md#imagesnapshot), [LhMessage](native-messages.md#lhmessage), [PlanTree](contracts-plan.md#plantree), [SessionOrigin](contracts-hub.md#sessionorigin), [SideChatThread](contracts-chat.md#sidechatthread), [TurnUsage](contracts-chat.md#turnusage).
 
 **Member index** (including nested object members; inherited members are defined in the linked base types):
 
@@ -178,6 +179,7 @@ export interface ChatRecord {
 - [messages](#chatrecord-messages)
 - [imageSnapshots](#chatrecord-imagesnapshots)
 - [kind](#chatrecord-kind)
+- [origin](#chatrecord-origin)
 - [tree](#chatrecord-tree)
 - [turns](#chatrecord-turns)
 - [extractions](#chatrecord-extractions)
@@ -229,6 +231,14 @@ The session's kind; an absent field reads as teach.
 
 ```ts
 kind?: ChatKind;
+```
+
+### ChatRecord origin
+
+The hub lesson, topic or plan this session belongs to; absent for sessions started outside the hub.
+
+```ts
+origin?: SessionOrigin;
 ```
 
 ### ChatRecord tree
@@ -367,10 +377,11 @@ export interface ChatSummary {
     pendingQuestion: boolean;
     pendingProblem: boolean;
     settings?: ChatSettings;
+    origin?: SessionOrigin;
 }
 ```
 
-**Related types:** [ChatKind](contracts-chat.md#chatkind), [ChatSettings](contracts-chat.md#chatsettings), [Phase3](phases.md#phase3).
+**Related types:** [ChatKind](contracts-chat.md#chatkind), [ChatSettings](contracts-chat.md#chatsettings), [Phase3](phases.md#phase3), [SessionOrigin](contracts-hub.md#sessionorigin).
 
 **Member index** (including nested object members; inherited members are defined in the linked base types):
 
@@ -384,6 +395,7 @@ export interface ChatSummary {
 - [pendingQuestion](#chatsummary-pendingquestion)
 - [pendingProblem](#chatsummary-pendingproblem)
 - [settings](#chatsummary-settings)
+- [origin](#chatsummary-origin)
 
 ### ChatSummary id
 
@@ -454,6 +466,14 @@ Saved per-session model/thinking choices included in the list payload.
 
 ```ts
 settings?: ChatSettings;
+```
+
+### ChatSummary origin
+
+Hub link, when the session belongs to a lesson, topic or plan.
+
+```ts
+origin?: SessionOrigin;
 ```
 
 ## ExtractionRunUsage

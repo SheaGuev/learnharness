@@ -13,7 +13,7 @@ import { createHash } from "node:crypto";
 import { PATHS } from "../../config.ts";
 import { emit } from "../core/events.ts";
 import type { ChatStore } from "../core/ports.ts";
-import type { ChatRecord, ChatSettings, ChatSummary, ExtractionRunUsage, ImageSnapshot, PlanTree, SideChatThread, TurnUsage } from "../core/contracts.ts";
+import type { ChatRecord, ChatSettings, ChatSummary, ExtractionRunUsage, ImageSnapshot, PlanTree, SessionOrigin, SideChatThread, TurnUsage } from "../core/contracts.ts";
 import { CURRENT_CHAT_VERSION } from "../core/contracts.ts";
 import type { LhMessage } from "../core/native-messages.ts";
 import { activeProblemOf, danglingQuestionOf } from "../core/native-messages.ts";
@@ -34,7 +34,7 @@ function chatFile(id: string): string {
  *  phase, busy, pendingQuestion) is already announced by turn-started /
  *  turn-settled, which the sidebar refetches on. Silence here is law,
  *  not oversight. */
-function createChat(title: string, kind?: "practice"): ChatRecord {
+function createChat(title: string, kind?: "practice", origin?: SessionOrigin): ChatRecord {
 	const now = new Date().toISOString();
 	const record: ChatRecord = {
 		id: `chat_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`,
@@ -45,6 +45,7 @@ function createChat(title: string, kind?: "practice"): ChatRecord {
 		// Practice sessions carry the marker; teach stays ABSENT (absence
 		// reads as teach — pre-practice records never migrate).
 		...(kind === "practice" ? { kind: "practice" as const } : {}),
+		...(origin ? { origin } : {}),
 	};
 	fs.mkdirSync(PATHS.chats, { recursive: true });
 	writeChat(record);
@@ -180,6 +181,15 @@ function appendExtractionUsage(id: string, entry: ExtractionRunUsage): void {
 
 /** Persist the per-chat model/thinking settings — replace-whole (the
  * picker sends the complete object; absent = config defaults). */
+function saveOrigin(id: string, origin: SessionOrigin | null): void {
+	const record = getChat(id);
+	if (!record) throw new Error(`Chat not found: ${id}`);
+	// Like saveSettings, linking is not conversation activity, so updatedAt stays put.
+	const { origin: _previous, ...rest } = record;
+	writeChat(origin ? { ...rest, origin } : rest);
+	emit("chats-changed", {});
+}
+
 function saveSettings(id: string, settings: ChatSettings): void {
 	const record = getChat(id);
 	if (!record) throw new Error(`Chat not found: ${id}`);
@@ -245,6 +255,7 @@ function updateSideChats(id: string, update: (threads: SideChatThread[]) => Side
 
 export const chatStore: ChatStore = {
 	createChat,
+	saveOrigin,
 	getChat,
 	listChats,
 	saveMessages,

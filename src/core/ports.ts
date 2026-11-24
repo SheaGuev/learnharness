@@ -30,6 +30,9 @@ import type {
 	SideChatThread,
 	TurnUsage,
 	NotesSource,
+	HubEvidence,
+	HubState,
+	SessionOrigin,
 } from "./contracts.ts";
 import type { UserSettings } from "./settings.ts";
 import type { Theme, ThemeFile } from "./themes.ts";
@@ -56,7 +59,9 @@ export interface ChatStore {
 	/** Create a session record (persisted immediately). */
 	/** Create a session record; kind "practice" marks a practice session
 	 *  (absent = teach, the default). */
-	createChat(title: string, kind?: "practice"): ChatRecord;
+	createChat(title: string, kind?: "practice", origin?: SessionOrigin): ChatRecord;
+	/** Link a session to the hub, or unlink it with null. Not conversation activity. */
+	saveOrigin(id: string, origin: SessionOrigin | null): void;
 	/** The full record, or null if unknown id / corrupt file. */
 	getChat(id: string): ChatRecord | null;
 	/** All sessions, newest activity first (the sidebar's list view). */
@@ -281,5 +286,17 @@ export interface AuthStore {
 	setAuthVar(name: string, value: string): void;
 	/** Remove one VAR if present (absent = no-op, still a silent success). */
 	deleteAuthVar(name: string): void;
+}
+
+/** The learning hub. State is one versioned document; evidence is an append-only ledger. */
+export interface HubStore {
+	/** Empty state when nothing is saved yet. Throws on data newer than this build. */
+	read(): HubState;
+	/** Validate and persist the whole state, then announce hub-changed. */
+	write(state: HubState): void;
+	/** Every readable evidence line; lines this build cannot interpret are skipped. */
+	readEvidence(): HubEvidence[];
+	/** Append evidence whose id is not yet recorded. Returns how many were new. */
+	appendEvidence(items: readonly HubEvidence[]): number;
 }
 

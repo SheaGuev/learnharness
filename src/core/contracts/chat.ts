@@ -10,6 +10,7 @@ import type { LhMessage } from "../native-messages.ts";
 import type { Phase3 } from "../phases.ts";
 import type { PlanNodeStatus, PlanTree } from "./plan.ts";
 import type { EmissionStats } from "./graph.ts";
+import type { SessionOrigin } from "./hub.ts";
 
 // ─── Chat records (the session store's on-disk format) ───────────────────────
 
@@ -31,6 +32,8 @@ export interface ChatRecord {
 	imageSnapshots?: Record<string, ImageSnapshot>;
 	/** The session's kind; an absent field reads as teach. */
 	kind?: ChatKind;
+	/** The hub lesson, topic or plan this session belongs to; absent for sessions started outside the hub. */
+	origin?: SessionOrigin;
 	/** The session's plan tree, written by the native plan tools. */
 	tree?: PlanTree;
 	/** Append-only usage log, separate from message history: one entry per billed
@@ -310,6 +313,8 @@ export interface ChatSummary {
 	pendingProblem: boolean;
 	/** Saved per-session model/thinking choices included in the list payload. */
 	settings?: ChatSettings;
+	/** Hub link, when the session belongs to a lesson, topic or plan. */
+	origin?: SessionOrigin;
 }
 
 /** Session-list row combining a saved summary with live server state.

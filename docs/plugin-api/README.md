@@ -25,6 +25,7 @@ The SDK is **type-only**. Call the contexts supplied by LearnHarness, not runtim
 
 - [contracts-chat](contracts-chat.md)
 - [contracts-graph](contracts-graph.md)
+- [contracts-hub](contracts-hub.md)
 - [contracts-jobs](contracts-jobs.md)
 - [contracts-models](contracts-models.md)
 - [contracts-plan](contracts-plan.md)
@@ -209,6 +210,9 @@ These are reachable through public data, event, inheritance or helper-type relat
 - [EmissionStats](contracts-graph.md#emissionstats) — `contracts-graph`
 - [GraphEdge](contracts-graph.md#graphedge) — `contracts-graph`
 - [ProvenancePoint](contracts-graph.md#provenancepoint) — `contracts-graph`
+- [HUB_MODES](contracts-hub.md#hub_modes) — `contracts-hub`
+- [HubMode](contracts-hub.md#hubmode) — `contracts-hub`
+- [SessionOrigin](contracts-hub.md#sessionorigin) — `contracts-hub`
 - [JobUsage](contracts-jobs.md#jobusage) — `contracts-jobs`
 - [CatalogDefaults](contracts-models.md#catalogdefaults) — `contracts-models`
 - [CatalogProvider](contracts-models.md#catalogprovider) — `contracts-models`
@@ -256,4 +260,4 @@ These are reachable through public data, event, inheritance or helper-type relat
 
 Standard JavaScript/DOM types (`Promise`, `AbortSignal`, `File`, `HTMLElement`, and utility types) use their standard contracts. Pi model/messages/tools and TypeBox schemas use the exact peer versions declared by the bundled SDK's `package.json`. Supply those peers when typechecking; they are development types, not permission to import private LearnHarness runtime modules.
 
-Coverage: **140 public types**, **57 supporting declarations**, **894 declared member signatures/variants**. Generation contains no build timestamps or absolute source paths.
+Coverage: **140 public types**, **60 supporting declarations**, **902 declared member signatures/variants**. Generation contains no build timestamps or absolute source paths.
