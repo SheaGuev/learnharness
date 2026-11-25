@@ -66,10 +66,13 @@ export function topicProgress(state: HubState, mastery: HubMastery, topicId: str
 	};
 }
 
-/** A first-message prompt for a lesson session, used until the server writes the lesson brief itself. */
-export function lessonPrompt(state: HubState, lesson: HubLesson, mode: "deep-dive" | "practice"): string {
+export type LessonMode = "explain" | "deep-dive" | "practice";
+
+/** The opening learner message for a lesson session; the server's brief carries the structured context. */
+export function lessonPrompt(state: HubState, lesson: HubLesson, mode: LessonMode): string {
 	const concepts = lessonConcepts(state, lesson).map((c) => c.title);
 	const list = concepts.length ? ` Concepts: ${concepts.join(", ")}.` : "";
 	if (mode === "practice") return `I want to practice "${lesson.title}". Goal: ${lesson.goal}.${list}`;
+	if (mode === "explain") return `Give me a short lesson on "${lesson.title}". Goal: ${lesson.goal}.${list}`;
 	return `Teach me "${lesson.title}". Goal: ${lesson.goal}.${list}`;
 }

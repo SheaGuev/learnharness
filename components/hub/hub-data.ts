@@ -159,6 +159,9 @@ export async function startHubSession(req: HubStartRequest): Promise<string> {
 		const body = await readJson(res);
 		const id = chatIdFrom(body);
 		if (!res.ok || !id) throw new Error(errorText(body, "Could not start the session."));
+		// The brief is a marker, not a learner turn, so the session only starts once this opening message is sent.
+		// If storage refuses it the session still opens and the learner can type the first message.
+		if (prompt.trim()) stashOpeningPrompt(id, prompt);
 		return id;
 	}
 

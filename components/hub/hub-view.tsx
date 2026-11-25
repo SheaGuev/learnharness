@@ -3,8 +3,8 @@
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-	ArchiveIcon, ArrowLeftIcon, ChevronDownIcon, ChevronRightIcon, DumbbellIcon, FolderPlusIcon, LinkIcon,
-	PencilIcon, PlayIcon, PlusIcon, RouteIcon, SparklesIcon, Trash2Icon,
+	ArchiveIcon, ArrowLeftIcon, BookOpenIcon, ChevronDownIcon, ChevronRightIcon, DumbbellIcon, FolderPlusIcon, LinkIcon,
+	MessageCircleQuestionIcon, PencilIcon, PlayIcon, PlusIcon, RouteIcon, SearchIcon, SparklesIcon, Trash2Icon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { HubForms, type HubCreated, type HubDialogState } from "./hub-forms";
 import {
 	ConceptDot, ConceptDots, DotLegend, LessonStatusBadge, NOT_YET, ProgressBar, SectionHeading, SessionList, STATUS_LABEL,
 } from "./hub-parts";
-import { childTopics, lessonConcepts, lessonPrompt, topicLessons, topicPath, topicProgress } from "./hub-tree";
+import { childTopics, lessonConcepts, lessonPrompt, topicLessons, topicPath, topicProgress, type LessonMode } from "./hub-tree";
 
 export type HubNav = { screen: "home" } | { screen: "topic"; id: string } | { screen: "plan"; id: string };
 
@@ -119,10 +119,10 @@ function useStart() {
 	return { busy, error, start, openChat: (id: string) => router.push(`/chat/${id}`) };
 }
 
-function lessonStart(data: HubData, lesson: HubLesson, mode: "deep-dive" | "practice", planId?: string) {
+function lessonStart(data: HubData, lesson: HubLesson, mode: LessonMode, planId?: string) {
 	return {
 		mode, lessonId: lesson.id, topicId: lesson.topicId, ...(planId ? { planId } : {}),
-		title: mode === "practice" ? `Practice: ${lesson.title}` : lesson.title,
+		title: mode === "practice" ? `Practice: ${lesson.title}` : mode === "explain" ? `Explain: ${lesson.title}` : lesson.title,
 		prompt: lessonPrompt(data.state, lesson, mode),
 	};
 }
@@ -353,6 +353,7 @@ function TopicScreen({ ctx, topic }: { ctx: Ctx; topic: HubTopic }) {
 			{progress.total > 0 && <ProgressBar solid={progress.solid} total={progress.total} className="mb-4 max-w-sm" />}
 			<div className="mb-8 flex flex-wrap gap-2">
 				<Button size="sm" onClick={() => ctx.open({ kind: "lesson", topicId: topic.id })} data-testid="hub-new-lesson"><PlusIcon /> Lesson</Button>
+				<Button size="sm" variant="outline" onClick={() => ctx.open({ kind: "ask", topicId: topic.id, about: topic.title })} data-testid="hub-topic-ask"><MessageCircleQuestionIcon /> Ask</Button>
 				<Button size="sm" variant="outline" onClick={() => ctx.open({ kind: "topic", parentId: topic.id })} data-testid="hub-new-subtopic"><FolderPlusIcon /> Subtopic</Button>
 				<Button size="sm" variant="outline" onClick={() => ctx.open({ kind: "adopt", topicId: topic.id })}><LinkIcon /> Add a session</Button>
 				<Button size="sm" variant="ghost" onClick={() => ctx.open({ kind: "topic", parentId: topic.parentId, edit: topic })} data-testid="hub-edit-topic"><PencilIcon /> Edit</Button>
@@ -446,11 +447,19 @@ function LessonCard({ ctx, lesson, all, planId, highlight = false }: {
 								title={sessions.length ? "Reopen the latest session" : "No session yet"}>
 								<PlayIcon /> Continue
 							</Button>
-							<Button size="sm" variant="outline" disabled={starter.busy} onClick={() => starter.start(lessonStart(data, lesson, "deep-dive", planId))} data-testid="hub-lesson-new-session">
-								<PlusIcon /> New session
+							<Button size="sm" variant="outline" disabled={starter.busy} onClick={() => starter.start(lessonStart(data, lesson, "explain", planId))} data-testid="hub-lesson-explain"
+								title="A short lesson with checks at the end, no assessment first">
+								<BookOpenIcon /> Explain
+							</Button>
+							<Button size="sm" variant="outline" disabled={starter.busy} onClick={() => starter.start(lessonStart(data, lesson, "deep-dive", planId))} data-testid="hub-lesson-new-session"
+								title="Step-by-step lesson; assesses you first when your evidence is missing or stale">
+								<SearchIcon /> Deep dive
 							</Button>
 							<Button size="sm" variant="outline" disabled={starter.busy} onClick={() => starter.start(lessonStart(data, lesson, "practice", planId))} data-testid="hub-lesson-practice">
 								<DumbbellIcon /> Practice
+							</Button>
+							<Button size="sm" variant="outline" onClick={() => ctx.open({ kind: "ask", topicId: lesson.topicId, lessonId: lesson.id, about: lesson.title })} data-testid="hub-lesson-ask">
+								<MessageCircleQuestionIcon /> Ask
 							</Button>
 							<Button size="sm" variant="outline" data-testid="hub-lesson-deeper"
 								onClick={() => ctx.open({ kind: "lesson", topicId: lesson.topicId, parentLessonId: lesson.id, seedConcepts: weak, seedTitle: `Deep dive: ${lesson.title}` })}>

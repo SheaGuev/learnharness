@@ -5,7 +5,8 @@ import { ArrowDownIcon, ArrowUpIcon, PlusIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { adoptChat, hubEdit, unlinkedChats, type HubData } from "./hub-data";
+import { useRouter } from "next/navigation";
+import { adoptChat, hubEdit, startHubSession, unlinkedChats, type HubData } from "./hub-data";
 import { Field, HubDialog, SELECT_CLASS } from "./hub-parts";
 import { topicOptions } from "./hub-tree";
 import type { ChatSummary, HubConcept, HubLesson, HubPlan, HubTopic } from "@/src/core";
@@ -14,7 +15,8 @@ export type HubDialogState =
 	| { kind: "topic"; parentId: string | null; edit?: HubTopic }
 	| { kind: "lesson"; topicId: string; edit?: HubLesson; parentLessonId?: string; seedConcepts?: HubConcept[]; seedTitle?: string }
 	| { kind: "plan"; edit?: HubPlan }
-	| { kind: "adopt"; lessonId?: string; topicId?: string };
+	| { kind: "adopt"; lessonId?: string; topicId?: string }
+	| { kind: "ask"; topicId: string; lessonId?: string; about: string };
 
 export type HubCreated = { kind: "topic" | "lesson" | "plan"; id: string };
 
@@ -359,6 +361,27 @@ function AdoptForm({ data, lessonId, topicId, onClose }: { data: HubData; lesson
 	);
 }
 
+function AskForm({ topicId, lessonId, about, onClose }: { topicId: string; lessonId?: string; about: string; onClose: () => void }) {
+	const router = useRouter();
+	const [question, setQuestion] = useState("");
+	const { busy, error, run } = useSubmit(() => {});
+	return (
+		<HubDialog open title={`Ask about ${about}`} onClose={onClose} busy={busy} testId="hub-ask-form">
+			<form onSubmit={run(async () => {
+				const id = await startHubSession({ mode: "ask", topicId, ...(lessonId ? { lessonId } : {}), title: question, prompt: question });
+				router.push(`/chat/${id}`);
+			})}>
+				<Field label="Question">
+					<Textarea value={question} onChange={(e) => setQuestion(e.target.value)} required autoFocus
+						placeholder="e.g. When would I pick write-through over cache-aside?" data-testid="hub-ask-question" />
+				</Field>
+				<p className="mb-3 text-sm text-muted-foreground">You get a direct answer with no assessment. Ask for a lesson from there if you want to go further.</p>
+				<Footer busy={busy} error={error} submit="Ask" onCancel={onClose} />
+			</form>
+		</HubDialog>
+	);
+}
+
 export function HubForms({ dialog, data, onClose, onCreated }: {
 	dialog: HubDialogState | null; data: HubData; onClose: () => void; onCreated: (c: HubCreated) => void;
 }) {
@@ -377,5 +400,7 @@ export function HubForms({ dialog, data, onClose, onCreated }: {
 			return <PlanForm data={data} edit={dialog.edit} onClose={onClose} onCreated={onCreated} />;
 		case "adopt":
 			return <AdoptForm data={data} lessonId={dialog.lessonId} topicId={dialog.topicId} onClose={onClose} />;
+		case "ask":
+			return <AskForm topicId={dialog.topicId} lessonId={dialog.lessonId} about={dialog.about} onClose={onClose} />;
 	}
 }
