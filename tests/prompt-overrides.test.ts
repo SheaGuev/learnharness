@@ -108,6 +108,7 @@ describe("isValidSegmentPath (the mirror-layout discipline)", () => {
 		assert.equal(isValidSegmentPath("system-prompt.md"), true);
 		assert.equal(isValidSegmentPath("teacher/20-teaching.md"), true);
 		assert.equal(isValidSegmentPath("prober/10-probe-doctrine.md"), true);
+		assert.equal(isValidSegmentPath("tutor/00-base.md"), true);
 		// the shared/ fragments dir (sources v1): composed by BOTH agents,
 		// overridable like any other segment
 		assert.equal(isValidSegmentPath("shared/10-personality.md"), true);
@@ -500,3 +501,55 @@ describe("test isolation (the suite must never touch real user data)", () => {
 		promptOverrides.deleteOverride("system-prompt.md");
 	});
 });
+
+describe("Tutor (Ask) prompt composition and settings", () => {
+	const TUTOR_PATHS = [
+		"tutor/00-base.md",
+		"shared/10-voice.md", "shared/15-accuracy.md", "shared/30-learner-files.md", "shared/35-side-conversations.md", "shared/40-formatting.md",
+	];
+
+	it("composes its own base plus a curated shared appendix, never the teaching base or question mechanics", async () => {
+		assert.deepEqual(effectivePromptSegments("tutor", {}).map((s) => s.path), TUTOR_PATHS);
+		const composed = teacherAgent.composeInstructions("tutor");
+		assert.ok(composed.startsWith("# The agent"), "the tutor base leads");
+		assert.match(composed, /Answer first/);
+		assert.match(composed, /Explain/);
+		assert.match(composed, /Deep dive/);
+		const excluded = ["system-prompt.md", "shared/16-mental-model.md", "shared/20-question-tools.md", "shared/25-confidence.md"];
+		for (const segment of excluded) {
+			const source = effectivePromptSegments(segment === "system-prompt.md" ? "teacher" : "prober", {}).find((s) => s.path === segment);
+			assert.ok(source, `${segment} exists in the source tree`);
+			assert.ok(!composed.includes(source.sourceText.trim()), `${segment} stays out of the tutor prompt`);
+		}
+		for (const tool of ["plan_init", "probe_done", "`quiz`"]) assert.ok(!composed.includes(tool), tool);
+	});
+
+	it("the segment registry and GET view know the tutor", async () => {
+		for (const segment of TUTOR_PATHS) assert.ok(allSegmentPaths().includes(segment), segment);
+		const view = await (await getPromptSegments()).json();
+		assert.deepEqual(view.tutor, effectivePromptSegments("tutor", readSettingsRecord()?.agent?.prompts ?? {}));
+	});
+
+	it("tutor/00-base.md: save, enable and delete change only the tutor's composition", async () => {
+		const segment = "tutor/00-base.md";
+		const defaults = Object.fromEntries((["teacher", "prober", "practice", "tutor"] as const).map((kind) => [kind, teacherAgent.composeInstructions(kind)]));
+		const text = "SYNTHETIC TUTOR OVERRIDE";
+		const context = { params: Promise.resolve({ segment: segment.split("/") }) };
+		const saved = await putPromptText(new Request("http://test/api/settings/prompts", {
+			method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }),
+		}), context);
+		assert.equal(saved.status, 200);
+		assert.equal((await putSection("agent", { prompts: { [segment]: true } })).status, 200);
+		const switches = readSettingsRecord()?.agent?.prompts ?? {};
+		const composed = teacherAgent.composeInstructions("tutor", switches);
+		assert.ok(composed.startsWith(text));
+		for (const kind of ["teacher", "prober", "practice"] as const) {
+			assert.equal(teacherAgent.composeInstructions(kind, switches), defaults[kind]);
+		}
+		const agent = teacherAgent.createTutorAgent({ engine: fauxEngine(), promptSwitches: switches });
+		assert.ok(agent.state.systemPrompt.startsWith(text), "a tutor turn composes the enabled override");
+		assert.equal((await deleteSegment(segment.split("/"))).status, 200);
+		assert.equal(teacherAgent.composeInstructions("tutor", readSettingsRecord()?.agent?.prompts ?? {}), defaults.tutor);
+	});
+});
+

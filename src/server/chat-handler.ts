@@ -3,7 +3,9 @@ import {
 	createPracticeAgent,
 	createProberAgent,
 	createTeacherAgent,
+	createTutorAgent,
 	type AgentBuildOptions,
+	type AgentKind,
 	type TeachingAgent,
 } from "../agent/teacher-agent.ts";
 import { piEngineForSpec, type PiEngine } from "../agent/models.ts";
@@ -77,7 +79,26 @@ import {
 	type TurnInput,
 } from "../core/input-events.ts";
 import { steerDelivered } from "../core/contracts.ts";
-import type {CallUsage} from "../core/contracts.ts";
+import type {CallUsage, ChatRecord} from "../core/contracts.ts";
+
+/** Which agent a record's next turn runs: practice and tutor sessions keep
+ *  their own agent from turn 1; teaching sessions switch prober → teacher
+ *  at the probe seam (or start at the teacher when the hub skipped it). */
+export function sessionAgentKind(record: Pick<ChatRecord, "kind" | "messages" | "origin">): AgentKind {
+	if (record.kind === "practice" || record.kind === "tutor") return record.kind;
+	return startsInTeach(record) ? "teacher" : "prober";
+}
+
+/** The prompt a record's agent composes, for system-prompt size estimates.
+ *  The prober's prompt is close enough to the teacher's for the estimate. */
+function promptAgentFor(record: Pick<ChatRecord, "kind">): "practice" | "tutor" | "teacher" {
+	return record.kind === "practice" || record.kind === "tutor" ? record.kind : "teacher";
+}
+
+function compactionKindFor(record: Pick<ChatRecord, "kind" | "messages" | "origin">): "practice" | "tutor" | "teach" | "probe" {
+	const agent = sessionAgentKind(record);
+	return agent === "teacher" ? "teach" : agent === "prober" ? "probe" : agent;
+}
 
 /**
  * One chat turn over the server-owned native record. Framework-free (plain
@@ -365,7 +386,7 @@ export async function handleChatInput(
 	const modelIdForCompaction = `${conversationEngine.model.provider}:${conversationEngine.model.id}`;
 	const contextWindow = catalogContextLimits().get(modelIdForCompaction);
 	const thresholdTokens = effectiveThresholdTokens(effective.compaction?.thresholdTokens, contextWindow);
-	const systemPromptTokens = Math.ceil(composeInstructions(record.kind === "practice" ? "practice" : "teacher").length / 4);
+	const systemPromptTokens = Math.ceil(composeInstructions(promptAgentFor(record)).length / 4);
 	const estimateModel = effective.compaction.includeReasoning ? conversationEngine.model : undefined;
 	const fitsSideContext = (messages: readonly LhMessage[]) => {
 		const live = messages.filter((message) => (message as { role: string }).role !== "system");
@@ -390,7 +411,7 @@ export async function handleChatInput(
 			engine: compactionEngine,
 			canStart: () => !isTurnRunning(chatId) && connectionBackgroundAllowed(conversation.provider),
 			modelId: modelIdForCompaction,
-			kind: record.kind === "practice" ? "practice" : startsInTeach(record) ? "teach" : "probe",
+			kind: compactionKindFor(record),
 			includeReasoning: effective.compaction.includeReasoning,
 			thresholdTokens,
 			systemPromptTokens,
@@ -643,6 +664,7 @@ export async function handleChatInput(
 	// Both share this whole composition (write-ahead persist, liveness,
 	// steers, usage, extraction) — only the agent differs.
 	const teaching = startsInTeach({ messages: agentMessages, origin: record.origin });
+	const agentKind = sessionAgentKind({ kind: record.kind, messages: agentMessages, origin: record.origin });
 	// BYOK (owner, 2026-09-22): the conversation chain was resolved by the
 	// turn gate above (chat.model override → strong slot → refused) — the
 	// engine build is pure from here; thinking levels clamp natively.
@@ -732,10 +754,13 @@ export async function handleChatInput(
 	// session builds the practitioner from turn 1 — no prober→teacher
 	// split, no plan/question/job tools; the whole registry is
 	// problem + conclude. buildAgent stays honored (the test seam is
-	// uniform across kinds).
+	// uniform across kinds). A kind:"tutor" (hub Ask) session builds the
+	// tutor from turn 1: answer-first, file tools and ask_user_question only.
 	const constructed: TeachingAgent = buildAgent
 		? buildAgent({ ...agentOpts, teaching })
-		: record.kind === "practice"
+		: agentKind === "tutor"
+			? createTutorAgent(agentOpts)
+		: agentKind === "practice"
 			? createPracticeAgent(
 					{
 						chatId,
@@ -759,7 +784,7 @@ export async function handleChatInput(
 					},
 					agentOpts,
 				)
-			: teaching
+			: agentKind === "teacher"
 			? createTeacherAgent(
 					{
 						chatId,
@@ -885,8 +910,8 @@ export async function handleChatInput(
 				// extraction, its auditor — dies with the master switch.
 				// PRACTICE (owner, 2026-10-04): practice sessions write nothing —
 				// no extraction, no graph, no coverage (v1: the session itself
-				// is the deliverable).
-				if ((!requestCycle || requestCycle.dispatched) && record.kind !== "practice" && extractionEnabled(effective.graph)) {
+				// is the deliverable). Tutor (Ask) sessions don't extract either.
+				if ((!requestCycle || requestCycle.dispatched) && record.kind !== "practice" && record.kind !== "tutor" && extractionEnabled(effective.graph)) {
 					// Fresh per-turn read of the graph section's chunk budget
 					// (extraction-UX redesign, 2026-09-24): the trigger compares
 					// against it and the pipeline's batches share it.
@@ -939,13 +964,13 @@ export async function handleChatInput(
 							engine: kickEngine,
 							canStart: () => !isTurnRunning(chatId) && connectionBackgroundAllowed(spec.provider),
 							modelId: kickModelId,
-							kind: freshRecord.kind === "practice" ? "practice" : startsInTeach(freshRecord) ? "teach" : "probe",
+							kind: compactionKindFor(freshRecord),
 							includeReasoning: fresh.compaction.includeReasoning,
 							thresholdTokens: effectiveThresholdTokens(
 								fresh.compaction?.thresholdTokens,
 								catalogContextLimits().get(kickModelId),
 							),
-							systemPromptTokens: Math.ceil(composeInstructions(freshRecord.kind === "practice" ? "practice" : "teacher").length / 4),
+							systemPromptTokens: Math.ceil(composeInstructions(promptAgentFor(freshRecord)).length / 4),
 						};
 					}, chatId);
 			},

@@ -106,7 +106,7 @@ export function adoptChat(body: unknown): { lessonId: string; createdLesson: boo
 	if (!chatId) throw new HubRequestError("chatId is required.", 400);
 	const chat = chatStore.getChat(chatId);
 	if (!chat) throw new HubRequestError("That session no longer exists.", 404);
-	const mode: HubMode = chat.kind === "practice" ? "practice" : "deep-dive";
+	const mode: HubMode = chat.kind === "practice" ? "practice" : chat.kind === "tutor" ? "ask" : "deep-dive";
 
 	const lessonId = optionalId(body, "lessonId");
 	if (lessonId) {
@@ -200,7 +200,7 @@ export function startHubSession(body: unknown, now: Date = new Date()): HubStart
 		...(mode === "practice" ? {} : { skipProbe: !probe.probe }),
 	};
 
-	const chat = chatStore.createChat(titleFromPrompt(lesson?.title ?? prompt ?? topic?.title ?? ""), mode === "practice" ? "practice" : undefined, origin);
+	const chat = chatStore.createChat(titleFromPrompt(lesson?.title ?? prompt ?? topic?.title ?? ""), mode === "practice" ? "practice" : mode === "ask" ? "tutor" : undefined, origin);
 	chatStore.saveMessages(chat.id, [newSessionBriefMessage(brief)]);
 	// Same birth stamp as POST /api/chats: a session owns the strong slot's model from creation.
 	const strong = readSettings()?.models?.strong;

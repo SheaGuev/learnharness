@@ -12,13 +12,14 @@ export function needsSendToUser(model: { provider: string; id: string }): boolea
 }
 
 /** One availability rule for the tool and its teacher-only delivery guard.
- * Practice uses ordinary final prose; explicit registries remain caller-owned. */
+ * The tutor's answer is its whole turn, so it gets the tool too. Practice
+ * uses ordinary final prose; explicit registries remain caller-owned. */
 export function sendToUserApplies(
 	kind: string,
 	model: { provider: string; id: string },
 	toolsOverridden: boolean,
 ): boolean {
-	return (kind === "prober" || kind === "teacher") && !toolsOverridden && needsSendToUser(model);
+	return (kind === "prober" || kind === "teacher" || kind === "tutor") && !toolsOverridden && needsSendToUser(model);
 }
 
 const sendToUserInput = Type.Object({

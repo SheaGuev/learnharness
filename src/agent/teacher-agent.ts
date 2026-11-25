@@ -15,6 +15,7 @@ import {
 	type TeacherToolContext,
 } from "./tools.ts";
 import { practiceTools, createPracticeGate, type PracticeGate, type PracticeToolContext } from "./tools/practice.ts";
+import { createTutorTools } from "./tools/tutor.ts";
 import { pluginProblemTools, isPluginProblemPoseAcknowledgment, type NativePluginProblemContribution } from "./plugin-problem-tools.ts";
 import { healToolRecord, withArgumentHeal } from "./tools/heal.ts";
 import { sendToUserApplies, sendToUserTool } from "./tools/send-to-user.ts";
@@ -52,9 +53,10 @@ import { PluginQuestionLedger, type NativePluginQuestionContribution } from "./p
  * without ever leaking into the model's prompt.
  */
 
-/** Which agent's prompt directory to compose. Practice (2026-10-04)
- *  composes ONLY its own directory — see prompt-segments.ts. */
-export type AgentKind = "prober" | "teacher" | "practice";
+/** Which agent's prompt directory to compose. Practice (2026-10-04) and
+ *  tutor compose their own base plus a curated shared appendix — see
+ *  prompt-segments.ts. */
+export type AgentKind = "prober" | "teacher" | "practice" | "tutor";
 
 /** Reserve conversation builtins even when role/mechanics/settings gates hide them.
  * New builtin names must join this catalog; actual turn tools are reserved too. */
@@ -101,6 +103,7 @@ const composedInstructions: Record<AgentKind, string> = {
 	prober: composeInstructions("prober"),
 	teacher: composeInstructions("teacher"),
 	practice: composeInstructions("practice"),
+	tutor: composeInstructions("tutor"),
 };
 
 // Money channel (wave 4): the chat-handler passes a per-turn collector;
@@ -203,10 +206,10 @@ function makeQuestionStopper(kind: AgentKind) {
 
 function baseAgentOptions(kind: AgentKind, opts: AgentBuildOptions, tools: AgentTool<any, any>[], nodeExists?: (nodeId: string) => boolean,
 	practice?: { gate: PracticeGate; graphNodes: PracticeToolContext["graphNodes"] }) {
-	// Practice never reaches the role fallback (the handler ALWAYS injects
-	// the session's conversation engine — practice rides the same
+	// Practice and tutor never reach the role fallback (the handler ALWAYS
+	// injects the session's conversation engine — they ride the same
 	// conversation-spec resolution as teaching); the cast keeps AgentKind
-	// ("practice" is not a ModelRole) honest about that.
+	// ("practice" and "tutor" are not ModelRoles) honest about that.
 	const engine = opts.engine ?? piEngineFor(kind as "prober" | "teacher");
 	const stopper = makeQuestionStopper(kind);
 	const narrationGuard = narrationGuardApplies(kind, engine.model, opts.tools !== undefined);
@@ -225,8 +228,10 @@ function baseAgentOptions(kind: AgentKind, opts: AgentBuildOptions, tools: Agent
 			? [withArgumentHeal(sendToUserTool)]
 			: []),
 	];
-	const contributions = opts.tools === undefined && opts.chatId && opts.pluginContributions
-		? opts.pluginContributions({ chatId: opts.chatId, agent: kind }, [...CONVERSATION_TOOL_NAMES, ...builtinTools.map(tool => tool.name)])
+	// Plugins don't extend the tutor: PluginAgentKind has no "tutor" member.
+	const pluginAgent = kind === "tutor" ? undefined : kind;
+	const contributions = opts.tools === undefined && opts.chatId && opts.pluginContributions && pluginAgent
+		? opts.pluginContributions({ chatId: opts.chatId, agent: pluginAgent }, [...CONVERSATION_TOOL_NAMES, ...builtinTools.map(tool => tool.name)])
 		: undefined;
 	const questionLedger = contributions?.questionTypes?.length && opts.chatId
 		? new PluginQuestionLedger(contributions.questionTypes, opts.chatId, nodeExists) : undefined;
@@ -405,8 +410,19 @@ export function createPracticeAgent(ctx: PracticeToolContext, opts: AgentBuildOp
 	return baseAgentOptions("practice", opts, Object.values(practiceTools(ctx, gate)), undefined, { gate, graphNodes: ctx.graphNodes });
 }
 
+/**
+ * The TUTOR (Ask sessions): built from turn 1 of a kind:"tutor" session.
+ * Answer-first, no probe/plan/quiz tools; its registry is the learner-file
+ * set plus ask_user_question, whose clean pose ends the run like any
+ * question tool's.
+ */
+export function createTutorAgent(opts: AgentBuildOptions = {}) {
+	return baseAgentOptions("tutor", opts, Object.values(opts.tools ?? createTutorTools()));
+}
+
 export type ProberAgent = ReturnType<typeof createProberAgent>;
 export type TeacherAgent = ReturnType<typeof createTeacherAgent>;
 export type PracticeAgent = ReturnType<typeof createPracticeAgent>;
-export type TeachingAgent = ProberAgent | TeacherAgent | PracticeAgent;
+export type TutorAgent = ReturnType<typeof createTutorAgent>;
+export type TeachingAgent = ProberAgent | TeacherAgent | PracticeAgent | TutorAgent;
 

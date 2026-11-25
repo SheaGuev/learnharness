@@ -98,10 +98,12 @@ Supporting declaration used by a public type. This is not an additional runtime 
 
 Session kind: teach is the default when a saved record omits kind.
 Practice uses the adaptive-practice agent without teaching extraction or
-graph writes. Reading an absent kind does not require a record migration.
+graph writes. Tutor is a hub Ask session: an answer-first agent with no
+probe, plan or quiz, and no extraction. Reading an absent kind does not
+require a record migration.
 
 ```ts
-export type ChatKind = "teach" | "practice";
+export type ChatKind = "teach" | "practice" | "tutor";
 ```
 
 ## ChatListItem
