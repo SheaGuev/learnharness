@@ -16,6 +16,7 @@ import { hubStore } from "../store/hub.ts";
 import { resolveSettings, type EffectiveSettings } from "../core/settings-resolution.ts";
 import { syncCustomProvider } from "./custom-provider.ts";
 import { configureWorkerRequestAdmission } from "../agent/worker-request-admission.ts";
+import { configureReportOutcome } from "../agent/tools/report-outcome.ts";
 /** The wired adapters. Satisfies core/graph.ts's GraphDeps structurally. */
 export const stores = {
 	chatStore,
@@ -43,6 +44,7 @@ export function effectiveSettings(): EffectiveSettings {
 
 // Runtime policy is supplied at the composition root, never imported by agents.
 configureWorkerRequestAdmission(() => effectiveSettings().agent.workerRequestConcurrency);
+configureReportOutcome(hubStore);
 
 // Boot: register the custom endpoint (when configured) into piModels(); the
 // POST /api/custom-provider route re-syncs after every connect.
