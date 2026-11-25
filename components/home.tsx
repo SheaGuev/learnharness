@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { SurfaceRegion, usePageSurfaceBoundary, useSurfaceChromeStyle } from "./plugin-surfaces";
-import { CornerDownLeftIcon, DumbbellIcon } from "lucide-react";
+import { CornerDownLeftIcon, DumbbellIcon, GraduationCapIcon, NetworkIcon } from "lucide-react";
+import { HubView, type HubNav } from "@/components/hub/hub-view";
 import { GraphView } from "@/components/graph-view";
 import { MinimalHome } from "@/components/minimal-home";
 import { SetupDialog } from "@/components/setup-dialog";
@@ -22,16 +23,28 @@ import { SessionStarter } from "@/components/start-session";
 import type { TurnUsage } from "@/src/core";
 
 /**
- * Home — the knowledge graph is the main view, full-bleed edge to edge
- * (owner, graph-view round 1): the canvas owns the whole column, running
- * under the header and the new-session dock, both of which float over it
- * with no gradient scrims. Sessions live in the toggleable sidebar.
+ * Home — the learning hub is the main view; the knowledge graph is the
+ * secondary "Map" view (`/?view=map`), full-bleed edge to edge. Hub screens
+ * are addressed by `?topic=` and `?plan=` so browser history walks them.
+ * The header and the new-session dock float over both views.
  */
+function hubHref(nav: HubNav): string {
+	if (nav.screen === "topic") return `/?topic=${encodeURIComponent(nav.id)}`;
+	if (nav.screen === "plan") return `/?plan=${encodeURIComponent(nav.id)}`;
+	return "/";
+}
+
 export function Home({
 	initialConfigured,
 	rendering = true,
+	view = "hub",
+	hubNav = { screen: "home" },
 }: {
 	initialConfigured: boolean;
+	/** Which main view shows; read from `?view=` server-side per navigation. */
+	view?: "hub" | "map";
+	/** The hub screen, from `?topic=` / `?plan=`. */
+	hubNav?: HubNav;
 	/** GRAPH RENDERING off (owner, 2026-10-06): the home's main view is
 	 * the chains view, not the canvas. Read server-side per navigation —
 	 * changing the setting applies on the next visit home. */
@@ -188,7 +201,9 @@ export function Home({
 			    untouched, and the chain table stays behind its button. */}
 			<div ref={bodyRef} className="absolute inset-0">
 			<main className="absolute inset-0">
-				{rendering ? (
+				{view === "hub" ? (
+					<HubView nav={hubNav} onNavigate={(nav) => router.push(hubHref(nav))} />
+				) : rendering ? (
 					<GraphView
 						folderFilterSlot={folderFilterSlot}
 						chainSelectOpen={chainSelectOpen}
@@ -224,7 +239,11 @@ export function Home({
 						picker={(practiceProps.length > 0 || mode === "practice") && (
 							<NodePickerControl
 								count={practiceProps.length}
-								onOpen={() => setChainSelectOpen(true)}
+								onOpen={() => {
+									// The chain table lives on the map; picking switches there.
+									if (view !== "map") router.push("/?view=map");
+									setChainSelectOpen(true);
+								}}
 								onClear={() => setPracticeProps([])}
 							/>
 						)}
@@ -336,6 +355,24 @@ export function Home({
 				    sits the header's top gap from the left edge. */}
 				<div className="pointer-events-auto contents">
 					<SidebarToggle />
+				</div>
+				<div className="lh-no-drag pointer-events-auto flex items-center gap-0.5 rounded-lg border bg-card/85 p-0.5 shadow-sm backdrop-blur" data-testid="home-view-switch">
+					{(["hub", "map"] as const).map((v) => (
+						<button
+							key={v}
+							type="button"
+							data-testid={`home-view-${v}`}
+							aria-pressed={view === v}
+							onClick={() => router.push(v === "map" ? "/?view=map" : "/")}
+							className={
+								"flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors " +
+								(view === v ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground")
+							}
+						>
+							{v === "hub" ? <GraduationCapIcon aria-hidden="true" className="size-3" /> : <NetworkIcon aria-hidden="true" className="size-3" />}
+							{v === "hub" ? "Hub" : "Map"}
+						</button>
+					))}
 				</div>
 				{/* The graph's folder filter portals here (view only; graph
 				    rendering on). Empty when GraphView renders no control. */}

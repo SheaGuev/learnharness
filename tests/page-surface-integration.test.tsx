@@ -18,8 +18,8 @@ import { parseHTML } from "linkedom";
 const draft = <DraftShell busy={false} text="Preserved draft" onChange={() => {}} onSend={() => {}} />;
 type Page = { name: string; path: string; node: ReactNode; floating: boolean; content: string };
 const pages: Page[] = [
-	{ name: "Home graph", path: "/", node: <Home initialConfigured rendering />, floating: true, content: '[data-testid="home-mode-switch"]' },
-	{ name: "Home chains", path: "/", node: <Home initialConfigured rendering={false} />, floating: true, content: '[data-testid="open-chain-table"]' },
+	{ name: "Home graph", path: "/", node: <Home initialConfigured rendering view="map" />, floating: true, content: '[data-testid="home-mode-switch"]' },
+	{ name: "Home chains", path: "/", node: <Home initialConfigured rendering={false} view="map" />, floating: true, content: '[data-testid="open-chain-table"]' },
 	{ name: "New draft", path: "/chat/new", node: draft, floating: true, content: '[data-testid="composer"]' },
 	{ name: "Plugin view", path: "/plugins/fixture/overview", node: <PluginViewScreen pluginId="fixture" viewId="overview" />, floating: false, content: '[data-page-plugin-input]' },
 	{ name: "Unavailable plugin view", path: "/plugins/fixture/missing", node: <PluginViewScreen pluginId="fixture" viewId="missing" />, floating: false, content: 'a[href="/"]' },
