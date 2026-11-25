@@ -1,0 +1,74 @@
+{
+	"version": 1,
+	"topics": [
+		{
+			"id": "topic_mwvd5f6g_cae5f7b7",
+			"title": "Knowledge tracing",
+			"parentId": null,
+			"order": 0,
+			"createdAt": "2026-11-25T00:06:24.280Z"
+		}
+	],
+	"concepts": [
+		{
+			"id": "concept_mwvd5f6m_0a56ab2b",
+			"slug": "slip-and-guess",
+			"title": "Slip and guess",
+			"topicId": "topic_mwvd5f6g_cae5f7b7"
+		},
+		{
+			"id": "concept_mwvd5f6m_278b746e",
+			"slug": "learning-transition",
+			"title": "Learning transition",
+			"topicId": "topic_mwvd5f6g_cae5f7b7"
+		},
+		{
+			"id": "concept_mwvd5f6p_4180b52c",
+			"slug": "predict-update",
+			"title": "Predict update",
+			"topicId": "topic_mwvd5f6g_cae5f7b7"
+		},
+		{
+			"id": "concept_mwvd5f6p_2d1e0f76",
+			"slug": "bkt-closed-form-update",
+			"title": "BKT closed-form update",
+			"topicId": "topic_mwvd5f6g_cae5f7b7"
+		}
+	],
+	"lessons": [
+		{
+			"id": "lesson_mwvd5f6m_bd2e3c06",
+			"topicId": "topic_mwvd5f6g_cae5f7b7",
+			"title": "BKT basics",
+			"goal": "Explain the four BKT parameters",
+			"conceptIds": [
+				"concept_mwvd5f6m_0a56ab2b",
+				"concept_mwvd5f6m_278b746e"
+			],
+			"prereqLessonIds": [],
+			"parentLessonId": null,
+			"order": 0,
+			"createdAt": "2026-11-25T00:06:24.286Z",
+			"updatedAt": "2026-11-25T00:06:24.286Z"
+		},
+		{
+			"id": "lesson_mwvd5f6p_75e2d4ee",
+			"topicId": "topic_mwvd5f6g_cae5f7b7",
+			"title": "The BKT update",
+			"goal": "Run one predict-then-correct step by hand",
+			"conceptIds": [
+				"concept_mwvd5f6p_4180b52c",
+				"concept_mwvd5f6p_2d1e0f76"
+			],
+			"prereqLessonIds": [
+				"lesson_mwvd5f6m_bd2e3c06"
+			],
+			"parentLessonId": null,
+			"order": 1,
+			"createdAt": "2026-11-25T00:06:24.289Z",
+			"updatedAt": "2026-11-25T00:06:24.289Z"
+		}
+	],
+	"plans": [],
+	"explore": []
+}

@@ -1,0 +1,65 @@
+{
+	"id": "chat_mwvd5f6u_3cd47f7a",
+	"title": "The BKT update",
+	"createdAt": "2026-11-25T00:06:24.294Z",
+	"updatedAt": "2026-11-25T00:06:24.297Z",
+	"messages": [
+		{
+			"id": "msg_mwvd5f6x_27086944",
+			"role": "custom",
+			"customType": "session-brief",
+			"content": "[Session brief] — set by the learning hub when this session started:\n\nMode: Deep dive. Probe first, as thoroughly as usual, but don't re-test concepts recorded below as solid unless their review is due. Then plan and teach step by step with checks.\nLesson: The BKT update (topic: Knowledge tracing)\nGoal: Run one predict-then-correct step by hand\n\nLesson concepts (slug — title: known state). Use these slugs as the plan_init node ids, and as the nodeId of checks on these concepts:\n- predict-update — Predict update: no evidence yet\n- bkt-closed-form-update — BKT closed-form update: no evidence yet\n\nPrerequisites from earlier lessons:\n- slip-and-guess — Slip and guess: solid, last seen 2026-11-25\n- learning-transition — Learning transition: no evidence yet",
+			"display": true,
+			"details": {
+				"mode": "deep-dive",
+				"goal": "Run one predict-then-correct step by hand",
+				"probe": true,
+				"probeReason": "missing-evidence",
+				"lessonTitle": "The BKT update",
+				"topicTitle": "Knowledge tracing",
+				"concepts": [
+					{
+						"slug": "predict-update",
+						"title": "Predict update",
+						"status": "not-yet",
+						"lastAt": null,
+						"reviewDue": false,
+						"prerequisite": false
+					},
+					{
+						"slug": "bkt-closed-form-update",
+						"title": "BKT closed-form update",
+						"status": "not-yet",
+						"lastAt": null,
+						"reviewDue": false,
+						"prerequisite": false
+					},
+					{
+						"slug": "slip-and-guess",
+						"title": "Slip and guess",
+						"status": "solid",
+						"lastAt": "2026-11-25T00:06:24.293Z",
+						"reviewDue": false,
+						"prerequisite": true
+					},
+					{
+						"slug": "learning-transition",
+						"title": "Learning transition",
+						"status": "not-yet",
+						"lastAt": null,
+						"reviewDue": false,
+						"prerequisite": true
+					}
+				]
+			},
+			"timestamp": 1795565184297
+		}
+	],
+	"origin": {
+		"mode": "deep-dive",
+		"lessonId": "lesson_mwvd5f6p_75e2d4ee",
+		"topicId": "topic_mwvd5f6g_cae5f7b7",
+		"skipProbe": false
+	},
+	"version": 2
+}

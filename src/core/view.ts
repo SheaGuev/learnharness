@@ -420,6 +420,16 @@ function projectMarker(marker: LhMarkerMessage, out: LhViewMessage[]): void {
 			});
 			return;
 		}
+		case "session-brief": {
+			// Hub scaffolding, like the graph context: a quiet collapsed card
+			// above the first user message, never a text bubble.
+			out.push({
+				id: marker.id,
+				role: "user",
+				parts: [{ type: "data-session-brief", id: `sb_${marker.id}`, data: marker.details }],
+			});
+			return;
+		}
 		case "probe-handoff": {
 			out.push({
 				id: marker.id,
