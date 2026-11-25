@@ -275,6 +275,22 @@ after(() => {
 });
 
 describe("teacher chat flow (scripted model)", () => {
+	it("routing: origin.skipProbe runs the teacher on turn 1; a plain chat runs the prober", async () => {
+		const seen: boolean[] = [];
+		const route = (engine: PiEngine): Parameters<typeof handleChatRequest>[1] => (opts) => {
+			seen.push(opts.teaching);
+			return createTeacherAgent(undefined, { engine, messages: opts.messages });
+		};
+		const explain = createConfiguredChat("Test: explain session");
+		createdChats.push(explain.id);
+		chatStore.saveOrigin(explain.id, { mode: "explain", skipProbe: true });
+		await drainTurn(post(explain.id, { type: "text", text: "explain the solar system" }), route(scriptedTeacher(defaultLesson).engine));
+		const plain = createConfiguredChat("Test: plain session");
+		createdChats.push(plain.id);
+		await drainTurn(post(plain.id, { type: "text", text: "teach me the solar system" }), route(scriptedTeacher(defaultLesson).engine));
+		assert.deepEqual(seen, [true, false]);
+	});
+
 	it("quiz tool call persists as a pending part; the answer continues the lesson", async () => {
 		const { engine, calls } = scriptedTeacher(defaultLesson);
 		const chat = createConfiguredChat("Test: solar system");

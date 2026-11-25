@@ -55,8 +55,9 @@ import { sideChats, type SideChatService } from "./side-chat.ts";
 import { SIDE_CONTEXT_BUDGET_ERROR, sideBudgetRetryDrops, sideContextWindow } from "./side-context-budget.ts";
 import { registerTurn, rememberTurnFailure, unregisterTurn } from "./turn-runs.ts";
 import { persistTurn, triggerExtraction, TurnPersistenceError } from "./turn-service.ts";
-import { hasProbeDone, hasUnresolvedQuestion, pendingPluginQuestionOf, pluginQuestionCallsOf, questionCallsOf } from "../core/native-messages.ts";
+import { hasUnresolvedQuestion, pendingPluginQuestionOf, pluginQuestionCallsOf, questionCallsOf } from "../core/native-messages.ts";
 import { samePluginQuestionOccurrence } from "../core/plugin-questions.ts";
+import { startsInTeach } from "../core/phases.ts";
 import { composeInstructions } from "../agent/teacher-agent.ts";
 import { ensureCompacted, kickCompaction, effectiveThresholdTokens, projectedContextTokens, compactionInFlight } from "./compaction.ts";
 import { COMPACTION_RESERVE_TOKENS } from "../core/compaction.ts";
@@ -389,7 +390,7 @@ export async function handleChatInput(
 			engine: compactionEngine,
 			canStart: () => !isTurnRunning(chatId) && connectionBackgroundAllowed(conversation.provider),
 			modelId: modelIdForCompaction,
-			kind: record.kind === "practice" ? "practice" : hasProbeDone(record.messages) ? "teach" : "probe",
+			kind: record.kind === "practice" ? "practice" : startsInTeach(record) ? "teach" : "probe",
 			includeReasoning: effective.compaction.includeReasoning,
 			thresholdTokens,
 			systemPromptTokens,
@@ -636,11 +637,12 @@ export async function handleChatInput(
 
 	// AGENT CONSTRUCTION BRANCH (docs/archive/probe-teach-split.md §2): the transcript
 	// is the seam — a probe_done call in the record means the probe is
-	// concluded: build the TEACHER (planning + the full toolset). Otherwise
-	// the session is still probing: build the PROBER (quiz/ask + probe_done).
+	// concluded: build the TEACHER (planning + the full toolset). A hub
+	// session created with origin.skipProbe has the teacher from turn 1.
+	// Otherwise the session is still probing: build the PROBER (quiz/ask + probe_done).
 	// Both share this whole composition (write-ahead persist, liveness,
 	// steers, usage, extraction) — only the agent differs.
-	const teaching = hasProbeDone(agentMessages);
+	const teaching = startsInTeach({ messages: agentMessages, origin: record.origin });
 	// BYOK (owner, 2026-09-22): the conversation chain was resolved by the
 	// turn gate above (chat.model override → strong slot → refused) — the
 	// engine build is pure from here; thinking levels clamp natively.
@@ -937,7 +939,7 @@ export async function handleChatInput(
 							engine: kickEngine,
 							canStart: () => !isTurnRunning(chatId) && connectionBackgroundAllowed(spec.provider),
 							modelId: kickModelId,
-							kind: freshRecord.kind === "practice" ? "practice" : hasProbeDone(freshRecord.messages) ? "teach" : "probe",
+							kind: freshRecord.kind === "practice" ? "practice" : startsInTeach(freshRecord) ? "teach" : "probe",
 							includeReasoning: fresh.compaction.includeReasoning,
 							thresholdTokens: effectiveThresholdTokens(
 								fresh.compaction?.thresholdTokens,

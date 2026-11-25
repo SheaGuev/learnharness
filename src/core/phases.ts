@@ -14,6 +14,7 @@
 
 import { posedPluginQuestionOfPart } from "./tool-parts.ts";
 import { readPluginQuestionMessageAnnotation } from "./plugin-questions.ts";
+import type { SessionOrigin } from "./contracts/hub.ts";
 
 /** The three phases of a session, as the picker / header / dividers see them. */
 export type Phase3 = "probe" | "plan" | "teach";
@@ -46,9 +47,18 @@ function isTeachQuestionPart(part: PhaseMessage["parts"][number]): boolean {
 	return (part.type === "tool-quiz" || part.type === "tool-explain") && taggedNodeId(part.input);
 }
 
+/**
+ * Where a session's fold starts. A hub session that skips the probe has no
+ * probe_done to advance past, so it starts at plan; a probe_done pair is never
+ * faked because it would render an empty assessment card.
+ */
+export function initialPhase(origin: SessionOrigin | undefined): Phase3 {
+	return origin?.skipProbe === true ? "plan" : "probe";
+}
+
 /** The phase at `upToIndex` (inclusive; default: the last message). */
-export function phaseAt3(messages: readonly PhaseMessage[], upToIndex?: number): Phase3 {
-	let phase: Phase3 = "probe";
+export function phaseAt3(messages: readonly PhaseMessage[], upToIndex?: number, initial: Phase3 = "probe"): Phase3 {
+	let phase: Phase3 = initial;
 	const last = Math.min(upToIndex ?? messages.length - 1, messages.length - 1);
 	for (let i = 0; i <= last; i++) {
 		phase = advance(phase, messages[i]?.parts);
@@ -126,9 +136,9 @@ export function teachStepIndex(
  * 0..i each time (quadratic); this is the same derivation, linear.
  * out[i] === phaseAt3(messages, i) for every i.
  */
-export function phaseTimeline(messages: readonly PhaseMessage[]): Phase3[] {
+export function phaseTimeline(messages: readonly PhaseMessage[], initial: Phase3 = "probe"): Phase3[] {
 	const out: Phase3[] = [];
-	let phase: Phase3 = "probe";
+	let phase: Phase3 = initial;
 	for (let i = 0; i < messages.length; i++) {
 		phase = advance(phase, messages[i]?.parts);
 		out.push(phase);
@@ -138,15 +148,20 @@ export function phaseTimeline(messages: readonly PhaseMessage[]): Phase3[] {
 
 // ─── the native fold (Wave D: record-side phase over LhMessage[]) ───────────
 
-import { probeDoneResultIds, type LhMessage } from "./native-messages.ts";
+import { hasProbeDone, probeDoneResultIds, type LhMessage } from "./native-messages.ts";
+
+/** Whether a teaching session's next turn runs the teacher rather than the prober. */
+export function startsInTeach(record: { messages: readonly LhMessage[]; origin?: SessionOrigin }): boolean {
+	return hasProbeDone(record.messages) || record.origin?.skipProbe === true;
+}
 
 /** The phase at `upToIndex` (inclusive; default: the last message) of a
  *  NATIVE record. probe→plan advances at the probe_done call's clean
  *  toolResult; plan→teach at the assistant message carrying the first
  *  nodeId-tagged quiz CALL (mirrors the view fold — same seam, native
  *  shape). */
-export function phaseAt3Lh(messages: readonly LhMessage[], upToIndex?: number): Phase3 {
-	let phase: Phase3 = "probe";
+export function phaseAt3Lh(messages: readonly LhMessage[], upToIndex?: number, initial: Phase3 = "probe"): Phase3 {
+	let phase: Phase3 = initial;
 	const last = Math.min(upToIndex ?? messages.length - 1, messages.length - 1);
 	const concluded = probeDoneResultIds(messages.slice(0, last + 1));
 	for (let i = 0; i <= last; i++) {

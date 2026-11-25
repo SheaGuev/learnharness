@@ -17,7 +17,7 @@ import type { ChatRecord, ChatSettings, ChatSummary, ExtractionRunUsage, ImageSn
 import { CURRENT_CHAT_VERSION } from "../core/contracts.ts";
 import type { LhMessage } from "../core/native-messages.ts";
 import { activeProblemOf, danglingQuestionOf } from "../core/native-messages.ts";
-import { phaseAt3Lh } from "../core/phases.ts";
+import { initialPhase, phaseAt3Lh } from "../core/phases.ts";
 import { removeLeftoverTemps, writeFileAtomicSync } from "./atomic-write.ts";
 
 function chatFile(id: string): string {
@@ -108,7 +108,7 @@ function listChats(): ChatSummary[] {
 						// the NATIVE record (core/phases.ts phaseAt3Lh +
 						// native-messages.ts danglingQuestionOf). Liveness (busy) is
 						// NOT record-derived — the API route merges it (ChatListItem).
-						phase: phaseAt3Lh(messages),
+						phase: phaseAt3Lh(messages, undefined, initialPhase(summary.origin)),
 						pendingQuestion: danglingQuestionOf(messages) !== null,
 						// Practice: a posed problem with no conclude (the sidebar's
 						// "Problem waiting"); false on teaching sessions, which

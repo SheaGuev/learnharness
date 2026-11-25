@@ -116,6 +116,15 @@ describe("session kind (practice sessions, 2026-10-04)", () => {
 		assert.equal("pendingProblem" in chatStore.getChat(chat.id)!, false);
 	});
 
+	it("a skip-probe hub session lists at plan before any probe_done", () => {
+		const chat = chatStore.createChat("explain session", undefined, { mode: "explain", skipProbe: true });
+		chatStore.saveMessages(chat.id, [newUserMessage("Explain limits")]);
+		assert.equal(chatStore.listChats().find((c) => c.id === chat.id)?.phase, "plan");
+		const plain = chatStore.createChat("plain session");
+		chatStore.saveMessages(plain.id, [newUserMessage("Explain limits")]);
+		assert.equal(chatStore.listChats().find((c) => c.id === plain.id)?.phase, "probe");
+	});
+
 	const pose = () => practicePair(PRACTICE_PROBLEM_TOOL, "p1");
 	const conclude = () => practicePair(PRACTICE_CONCLUDE_TOOL, "c1");
 	const cases: Array<{ name: string; messages: LhMessage[]; pending: boolean }> = [
