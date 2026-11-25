@@ -229,3 +229,46 @@ test("phaseAt3 + phaseAt3Lh: a tagged explain CALL is the plan→teach seam too"
 		"the two folds agree on the explain mechanic",
 	);
 });
+
+// ─── skip-probe sessions (hub origin.skipProbe) ─────────────────────────────
+
+import { initialPhase, startsInTeach } from "../src/core/phases.ts";
+import { questionNeedsReveal } from "../src/core/question-core.ts";
+
+test("initialPhase: only an origin with skipProbe starts at plan", () => {
+	assert.equal(initialPhase(undefined), "probe");
+	assert.equal(initialPhase({ mode: "deep-dive" }), "probe");
+	assert.equal(initialPhase({ mode: "deep-dive", skipProbe: false }), "probe");
+	assert.equal(initialPhase({ mode: "explain", skipProbe: true }), "plan");
+});
+
+test("skip-probe folds: start at plan, teach at the first tagged quiz CALL, no probe_done needed", () => {
+	const tagged = assistantQuiz({ question: "q", correctAnswer: "a", nodeId: "n1" });
+	const untagged = assistantQuiz({ question: "q", correctAnswer: "a" });
+	assert.equal(phaseAt3([], undefined, "plan"), "plan");
+	assert.equal(phaseAt3([user("explain limits"), untagged], undefined, "plan"), "plan");
+	assert.equal(phaseAt3([user("explain limits"), tagged], undefined, "plan"), "teach");
+	assert.deepEqual(phaseTimeline([user("explain limits"), untagged, tagged, user("ok")], "plan"), ["plan", "plan", "teach", "teach"]);
+	assert.deepEqual(phaseTimeline([user("explain limits"), tagged]), ["probe", "probe"], "default fold still requires probe_done");
+
+	const nativeTagged = assistantQuizCall({ question: "q", nodeId: "n1", correctAnswer: "a" });
+	const nativeUntagged = assistantQuizCall({ question: "q", correctAnswer: "a" });
+	assert.equal(phaseAt3Lh([], undefined, "plan"), "plan");
+	assert.equal(phaseAt3Lh([nativeUntagged], undefined, "plan"), "plan");
+	assert.equal(phaseAt3Lh([nativeTagged], undefined, "plan"), "teach");
+	assert.equal(phaseAt3Lh([nativeTagged]), "probe");
+});
+
+test("skip-probe folds: a pending teach check collapses behind the reveal", () => {
+	const input = { question: "q", correctAnswer: "a", nodeId: "n1", type: "check" };
+	const phase = phaseAt3([user("explain limits"), assistantQuiz(input)], undefined, initialPhase({ mode: "explain", skipProbe: true }));
+	assert.equal(questionNeedsReveal("quiz", input, phase), true);
+});
+
+test("startsInTeach: a concluded probe_done or origin.skipProbe routes to the teacher", () => {
+	assert.equal(startsInTeach({ messages: [] }), false);
+	assert.equal(startsInTeach({ messages: [], origin: { mode: "deep-dive", skipProbe: false } }), false);
+	assert.equal(startsInTeach({ messages: [], origin: { mode: "explain", skipProbe: true } }), true);
+	assert.equal(startsInTeach({ messages: [assistantProbeCall(), toolResult("probe_done")] }), true);
+	assert.equal(startsInTeach({ messages: [assistantProbeCall(), toolResult("probe_done", true)] }), false);
+});

@@ -102,7 +102,7 @@ import { PluginSessionTopBarActions } from "@/components/plugin-chrome";
 import { usePluginShortcutPage } from "@/components/plugin-shortcuts";
 import { createPluginSessionActionContext, type PluginSessionViewInput } from "@/src/core";
 import type { SessionInputViewReader, SessionViewTargets, NativeQuestionViewState, ViewReaderRef } from "./session-view-readers";
-import type { JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TurnUsage, SessionPricing } from "@/src/core";
+import type { JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, SessionOrigin, TurnUsage, SessionPricing } from "@/src/core";
 import { isSubagentSteer, newestLearnerTurnFrom } from "./transcript-rows";
 import { PhaseChip, PhaseDivider } from "@/components/phase-divider";
 import {
@@ -119,6 +119,7 @@ import {
 	dismissedAnswer,
 	endsInFailedTurn,
 	findPendingToolCall,
+	initialPhase,
 	phaseAt3,
 	phaseTimeline,
 	teachStepIndex,
@@ -275,6 +276,7 @@ export function Chat({
 	initiallyCompacting = false,
 	initialConfigured = false,
 	kind = "teach",
+	origin,
 }: {
 	chatId: string;
 	title: string;
@@ -285,6 +287,8 @@ export function Chat({
 	 *  renders no phase chip (no probe→teach arc applies) and a Practice
 	 *  tag rides the header instead. */
 	kind?: "teach" | "practice";
+	/** Hub session origin; a skip-probe session's phases start at plan. */
+	origin?: SessionOrigin;
 	initialPrompt?: string;
 	/** A teacher turn is running server-side but attached to no client
 	 * (navigated away mid-turn, returned while in flight). */
@@ -312,6 +316,7 @@ export function Chat({
 	// turn stream is the VERBATIM AgentEvent passthrough the server emits.
 	const { canonicalMessages, reconciliation, reconcile, pluginQuestionAvailability, pluginQuestionDraft, pluginProblemAvailability, pluginProblemDraft, dismissPluginQuestion, readRecord, readStats, messages, nativeMessages, hasConfirmedConversation, contextTokens, send, continueIfOwed, steer, steerQueue, submitAnswer, dismissQuestion, dismissProblem, questionDraft, saveQuestionDraft, status, evaluating, error, stop, clearError, resumeStream, setReattachSettled } =
 		useChatSession({ chatId, initialMessages, initialError, initiallyInFlight });
+	const startPhase = initialPhase(origin);
 
 	const controller = useOptionalInteractionLayers();
 	const sessionFindScopeRef = useRef<HTMLDivElement | null>(null);
@@ -639,7 +644,7 @@ export function Chat({
 	// A pending question can never precede its phase's seam in the transcript (the teacher's turn
 	// ends at the question call), so the session's current phase IS the
 	// question's phase.
-	const requiresReveal = pendingPlugin ? pendingPlugin.variant === "teach" && pendingPlugin.input.type === "check" : pending !== null && questionNeedsReveal(pending.tool, pending.input, phaseAt3(messages));
+	const requiresReveal = pendingPlugin ? pendingPlugin.variant === "teach" && pendingPlugin.input.type === "check" : pending !== null && questionNeedsReveal(pending.tool, pending.input, phaseAt3(messages, undefined, startPhase));
 
 	/* The READING-THINKING channel (owner 2026-10-03): a draft field for
 	 * thinking while reading the teaching prose, mounted while a check waits
@@ -681,7 +686,7 @@ export function Chat({
 	// The phase at every message (one linear fold): the transcript draws a
 	// color-coded dotted divider at each boundary; the header chip reads the
 	// session's current phase.
-	const phases = useMemo(() => phaseTimeline(messages), [messages]);
+	const phases = useMemo(() => phaseTimeline(messages, startPhase), [messages, startPhase]);
 
 	const [composerDraftRevision, setComposerDraftRevision] = useState(0);
 	/* The composer draft ref is synchronous, so sends and dictation flushes
@@ -1594,7 +1599,7 @@ export function Chat({
 		return {
 			sessionId: chatId, kind: kind === "practice" ? "practice" : "teaching", title: titleText,
 			messages: nativeMessages, transcript: messages, status, reconciliation, busy, compacting,
-			phase: kind === "practice" ? "practice" : phases.at(-1) ?? "probe", contextTokens,
+			phase: kind === "practice" ? "practice" : phases.at(-1) ?? startPhase, contextTokens,
 			queuedSteers: visibleQueuedSteers(steerQueue, nativeMessages), composer: { text: textRef.current },
 			input: readViewInput(),
 		};
@@ -1753,7 +1758,7 @@ export function Chat({
 							Practice
 						</span>
 					) : (
-						<PhaseChip phase={phases.at(-1) ?? "probe"} />
+						<PhaseChip phase={phases.at(-1) ?? startPhase} />
 					)}
 					<PluginSessionTopBarActions readContext={actionContext} captureContext={captureActionContext} refreshRef={refreshPluginActions} />
 				</TopBar>
@@ -2095,7 +2100,7 @@ export function Chat({
 					readingThinking={readingThinkingSeed.value}
 					readingThinkingRevision={readingThinkingSeed.revision}
 					onReadingThinking={(value) => { applyReadingThinking(value); if (pendingPlugin) pluginQuestionDraft(pendingPlugin).readingThinking = value; }}
-					phase={phases.at(-1) ?? "probe"}
+					phase={phases.at(-1) ?? startPhase}
 					turns={turns}
 					contextTokens={contextTokens}
 					cliContextWindow={cliContextWindowOf(nativeMessages)}
