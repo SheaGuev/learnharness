@@ -470,7 +470,8 @@ function SessionsSidebar() {
 	}, [searching, query, openFolders, setFolderOpen]);
 	const tree = useMemo(() => {
 		if (!chats) return null;
-		const include = kindFilter === "all" ? undefined : (c: ChatListItem) => (c.kind ?? "teach") === kindFilter;
+		// Ask (tutor) sessions list with teaching; the filter only splits off practice.
+		const include = kindFilter === "all" ? undefined : (c: ChatListItem) => (c.kind === "practice" ? "practice" : "teach") === kindFilter;
 		return buildSessionTree(chats, organization, { query, include });
 	}, [chats, kindFilter, organization, query]);
 	const rows = useMemo(() => tree && flattenSessionTree(tree, isFolderOpen), [tree, isFolderOpen]);

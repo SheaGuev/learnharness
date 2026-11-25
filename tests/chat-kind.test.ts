@@ -14,6 +14,7 @@ import fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, describe, it } from "node:test";
+import { createFauxCore } from "@earendil-works/pi-ai";
 
 // ── the seam, BEFORE any config-loading import ──────────────────────────────
 const TMP_DATA = fs.mkdtempSync(path.join(os.tmpdir(), "lh-chat-kind-"));
@@ -21,6 +22,8 @@ process.env.LH_DATA_DIR = TMP_DATA;
 
 const { chatStore } = await import("../src/store/chats.ts");
 const { PRACTICE_PROBLEM_TOOL, PRACTICE_CONCLUDE_TOOL, newProblemDismissedMarker, newThinkingMessage, newUserMessage } = await import("../src/core/native-messages.ts");
+const { sessionAgentKind } = await import("../src/server/chat-handler.ts");
+const { createTutorAgent } = await import("../src/agent/teacher-agent.ts");
 
 type LhMessage = import("../src/core/native-messages.ts").LhMessage;
 
@@ -125,6 +128,12 @@ describe("session kind (practice sessions, 2026-10-04)", () => {
 		assert.equal(chatStore.listChats().find((c) => c.id === plain.id)?.phase, "probe");
 	});
 
+	it("createChat(kind: 'tutor') stamps the Ask marker on record + list", () => {
+		const chat = chatStore.createChat("ask session", "tutor", { mode: "ask", skipProbe: true });
+		assert.equal(chat.kind, "tutor");
+		assert.equal(chatStore.listChats().find((c) => c.id === chat.id)?.kind, "tutor");
+	});
+
 	const pose = () => practicePair(PRACTICE_PROBLEM_TOOL, "p1");
 	const conclude = () => practicePair(PRACTICE_CONCLUDE_TOOL, "c1");
 	const cases: Array<{ name: string; messages: LhMessage[]; pending: boolean }> = [
@@ -158,4 +167,54 @@ describe("session kind (practice sessions, 2026-10-04)", () => {
 			assert.equal(chatStore.listChats().find((c) => c.id === chat.id)?.pendingProblem, false);
 		});
 	}
+});
+
+describe("agent routing by session kind", () => {
+	const probeDone: LhMessage[] = [
+		{
+			id: "msg_a_pd",
+			role: "assistant",
+			content: [{ type: "toolCall", id: "call_pd", name: "probe_done", arguments: {} }],
+			api: "faux",
+			provider: "test",
+			model: "test-model",
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+			stopReason: "toolUse",
+			timestamp: 1,
+		},
+		{ id: "msg_r_pd", role: "toolResult", toolCallId: "call_pd", toolName: "probe_done", content: [{ type: "text", text: "ok" }], details: null, isError: false, timestamp: 2 },
+	];
+	const cases: Array<{ name: string; record: Parameters<typeof sessionAgentKind>[0]; agent: string }> = [
+		{ name: "a plain teaching session probes first", record: { messages: [newUserMessage("hi")] }, agent: "prober" },
+		{ name: "a concluded probe hands over to the teacher", record: { messages: [newUserMessage("hi"), ...probeDone] }, agent: "teacher" },
+		{ name: "a skip-probe hub session starts at the teacher", record: { messages: [], origin: { mode: "explain", skipProbe: true } }, agent: "teacher" },
+		{ name: "practice keeps the practitioner", record: { kind: "practice", messages: [] }, agent: "practice" },
+		{ name: "an Ask session runs the tutor from turn 1", record: { kind: "tutor", messages: [], origin: { mode: "ask", skipProbe: true } }, agent: "tutor" },
+		{ name: "the tutor never hands over, even after a probe_done", record: { kind: "tutor", messages: [newUserMessage("hi"), ...probeDone] }, agent: "tutor" },
+	];
+	for (const { name, record, agent } of cases) {
+		it(name, () => assert.equal(sessionAgentKind(record), agent));
+	}
+
+	it("the tutor's registry has no probe, plan, quiz or job tools, and plugins never extend it", () => {
+		let contributionCalls = 0;
+		const faux = createFauxCore({});
+		const agent = createTutorAgent({
+			engine: { model: faux.getModel(), streamFn: faux.streamSimple },
+			chatId: "chat_tutor",
+			pluginContributions: () => {
+				contributionCalls++;
+				return { instructions: ["PLUGIN"], tools: [] };
+			},
+		});
+		assert.deepEqual(agent.state.tools.map((t) => t.name).sort(), ["ask_user_question", "find", "grep", "ls", "read"]);
+		assert.equal(contributionCalls, 0);
+		assert.ok(!agent.state.systemPrompt.includes("PLUGIN"));
+	});
+
+	it("Claude models get send_to_user so the answer isn't folded into thinking", () => {
+		const faux = createFauxCore({});
+		const agent = createTutorAgent({ engine: { model: { ...faux.getModel(), id: "claude-faux" }, streamFn: faux.streamSimple } });
+		assert.ok(agent.state.tools.some((t) => t.name === "send_to_user"));
+	});
 });

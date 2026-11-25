@@ -285,8 +285,9 @@ export function Chat({
 	initialError?: string;
 	/** The session kind (practice sessions, owner 2026-10-04): practice
 	 *  renders no phase chip (no probe→teach arc applies) and a Practice
-	 *  tag rides the header instead. */
-	kind?: "teach" | "practice";
+	 *  tag rides the header instead. Tutor (hub Ask) sessions likewise show
+	 *  an Ask tag and no phase chip or coverage ring. */
+	kind?: "teach" | "practice" | "tutor";
 	/** Hub session origin; a skip-probe session's phases start at plan. */
 	origin?: SessionOrigin;
 	initialPrompt?: string;
@@ -1744,7 +1745,7 @@ export function Chat({
 					{/* Practice (owner, 2026-10-04): the coverage ring hides —
 				    practice never extracts, so an ever-filling ring with no
 				    run behind it would lie. */}
-					{kind !== "practice" && <CoverageRing chatId={chatId} refreshKey={coverageTick} />}
+					{kind !== "practice" && kind !== "tutor" && <CoverageRing chatId={chatId} refreshKey={coverageTick} />}
 					{/* Practice sessions: no phase arc — a quiet Practice tag
 					    instead of the phase chip. */}
 					{kind === "practice" ? (
@@ -1756,6 +1757,16 @@ export function Chat({
 						>
 							<DumbbellIcon className="size-3" />
 							Practice
+						</span>
+					) : kind === "tutor" ? (
+						<span
+							data-testid="phase-chip"
+							data-phase="ask"
+							aria-hidden="true"
+							className="pointer-events-none flex shrink-0 select-none items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+						>
+							<MessageCircleQuestionIcon className="size-3" />
+							Ask
 						</span>
 					) : (
 						<PhaseChip phase={phases.at(-1) ?? startPhase} />
@@ -1773,7 +1784,7 @@ export function Chat({
 							{messages.length === 0 && !busy && (
 								<ConversationEmptyState
 									title="New session"
-									description="The teacher will open by probing what you already know."
+									description={kind === "tutor" ? "Ask your question and the tutor will answer it directly." : "The teacher will open by probing what you already know."}
 								/>
 							)}
 

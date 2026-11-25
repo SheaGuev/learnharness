@@ -1,6 +1,6 @@
 # Prompt composition
 
-The runtime composes prompts for **prober**, **teacher** and **practice** agents. The source of truth is [`listSourceSegments` / `effectivePromptSegments`](../prompt-segments.ts); [`composeInstructions`](../teacher-agent.ts) selects effective text, trims each segment, drops empty segments and joins them with `\n\n---\n\n`. Non-fragment documentation such as this README never enters the prompt.
+The runtime composes prompts for **prober**, **teacher**, **practice** and **tutor** (Ask session) agents. The source of truth is [`listSourceSegments` / `effectivePromptSegments`](../prompt-segments.ts); [`composeInstructions`](../teacher-agent.ts) selects effective text, trims each segment, drops empty segments and joins them with `\n\n---\n\n`. Non-fragment documentation such as this README never enters the prompt.
 
 ## Composition order
 
@@ -9,6 +9,7 @@ The runtime composes prompts for **prober**, **teacher** and **practice** agents
 | Prober | [`system-prompt.md`](../system-prompt.md) → sorted `prober/` fragments → sorted `shared/` fragments |
 | Teacher | `system-prompt.md` → sorted `teacher/` fragments → sorted `shared/` fragments |
 | Practice | sorted `practice/` fragments → the curated shared appendix below; **no teaching base** |
+| Tutor | sorted `tutor/` fragments → its curated shared appendix below; **no teaching base** |
 | Side questions | [`side-chat/00-base.md`](side-chat/00-base.md) → shared `10-voice.md`, `15-accuracy.md`, `40-formatting.md` → final side-only [`90-style.md`](side-chat/90-style.md); composed by [`src/agent/side-chat.ts`](../side-chat.ts), not by the segment loader |
 
 Directory discovery accepts only filenames matching `^\d+-[\w.-]+\.md$` and sorts them lexicographically by filename. Keep numeric prefixes consistently padded when order matters. The teaching base supplies the agent's purpose/philosophy; voice, accuracy, mental-model, question, confidence, file and formatting guidance are separate shared fragments. The teacher's method and planning/teaching doctrine live in its own directory; probing doctrine lives in `prober/`.
@@ -16,6 +17,8 @@ Directory discovery accepts only filenames matching `^\d+-[\w.-]+\.md$` and sort
 The side-question base is not an editable segment (it is not listed in Settings); its shared appendix honors enabled overrides by the same keys the other agents use.
 
 Practice has its own base and doctrine. Its shared appendix is explicitly allowlisted in the loader: `10-voice.md`, `15-accuracy.md`, `16-mental-model.md`, `35-side-conversations.md` and `40-formatting.md`, in sorted order. Other shared fragments do **not** automatically enter practice. Adding a new shared fragment includes it in prober/teacher composition, but not practice unless the allowlist changes.
+
+The tutor (hub Ask sessions) works the same way with its own allowlist: `10-voice.md`, `15-accuracy.md`, `30-learner-files.md`, `35-side-conversations.md` and `40-formatting.md`. The thinking-field, graded-question and confidence fragments stay out because the tutor has no instruments that carry them.
 
 ## Overrides and defaults
 
@@ -26,6 +29,7 @@ system-prompt.md
 prober/<fragment>.md
 teacher/<fragment>.md
 practice/<fragment>.md
+tutor/<fragment>.md
 shared/<fragment>.md
 ```
 
@@ -38,6 +42,7 @@ The available segment list always comes from current source discovery. An overri
 ## Phases and tool contracts
 
 - Teaching sessions start with the prober. A successful `probe_done` call **and matching result** select the teacher on later turns; a bare/refused call does not. The teacher plans and teaches with its own tool registry. The displayed plan → teach boundary is the first tagged `quiz`/`explain` call, not simply `plan_init`.
+- Ask sessions (`kind: "tutor"`, created by `POST /api/hub/start` with `mode: "ask"`) use the tutor from turn one: answer-first, with `read`/`ls`/`find`/`grep` and `ask_user_question` only. No extraction, no phase arc, no plugin contributions.
 - Practice sessions use the practice prompt from turn one. `problem` commits a solution before posing; `conclude` reveals it. The doctrine requires a pause after conclusion until the learner explicitly moves on. This is a conversational agent, not the retired problem-set generation/grading pipeline.
 - Prompt instructions are not a substitute for structural validation. For example, `plan_init` can rewrite the map, and the conclude pause is doctrine rather than a terminating execute result. Read the actual registry and schemas before describing a behavior as enforced.
 

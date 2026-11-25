@@ -166,7 +166,9 @@ describe("POST /api/hub/start service", () => {
 	it("explain always skips; practice makes a practice chat without skipProbe", () => {
 		const { state, cachingId } = seeded();
 		hubStore.write(state);
-		assert.equal(startHubSession({ mode: "explain", lessonId: cachingId, probe: true }, NOW).origin.skipProbe, true);
+		const explain = startHubSession({ mode: "explain", lessonId: cachingId, probe: true }, NOW);
+		assert.equal(explain.origin.skipProbe, true);
+		assert.equal(chatStore.getChat(explain.id)?.kind, undefined, "explain is a teaching chat");
 		const practice = startHubSession({ mode: "practice", lessonId: cachingId }, NOW);
 		assert.equal(practice.origin.skipProbe, undefined);
 		assert.equal(chatStore.getChat(practice.id)?.kind, "practice");
@@ -177,6 +179,7 @@ describe("POST /api/hub/start service", () => {
 		const started = startHubSession({ mode: "ask", prompt: "  What is a write-back cache?  " }, NOW);
 		assert.deepEqual(started.origin, { mode: "ask", skipProbe: true });
 		const chat = chatStore.getChat(started.id);
+		assert.equal(chat?.kind, "tutor", "an ask runs the tutor agent");
 		assert.equal(chat?.title, "What is a write-back cache?");
 		const [first] = chat?.messages ?? [];
 		assert.ok(first?.role === "custom");
