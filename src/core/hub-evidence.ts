@@ -20,7 +20,7 @@ export interface EvidenceSource {
  * then by the node's title, since an adopted chat's map predates the lesson
  * and its slugs were chosen by the teacher.
  */
-function conceptForNode(nodeId: string, concepts: readonly HubConcept[], tree: PlanTree | undefined): HubConcept | undefined {
+export function conceptForNode(nodeId: string, concepts: readonly HubConcept[], tree: PlanTree | undefined): HubConcept | undefined {
 	const bySlug = concepts.find((c) => c.slug === nodeId || c.slug === slugify(nodeId));
 	if (bySlug) return bySlug;
 	const title = tree?.nodes.find((n) => n.id === nodeId)?.title;
