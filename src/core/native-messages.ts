@@ -50,6 +50,7 @@ import { compactAnswerForModel, type QuestionAnswerData } from "./question-core.
 import { activeCompactionOf, keptIndexFor } from "./compaction.ts";
 import { parseQuestionInput } from "./tool-parts.ts";
 import { expandCitationsForModel } from "./citations.ts";
+import { sessionBriefText, type SessionBrief } from "./hub-session.ts";
 import { readPluginQuestionMessageAnnotation, readPluginQuestionAnswer, readPluginQuestionCancellation, samePluginQuestionOccurrence, type PluginQuestionAnnotationRead, type PluginQuestionOccurrence, type PluginQuestionOccurrenceMap, type PluginQuestionSnapshot } from "./plugin-questions.ts";
 
 /** The hard-invariant wording for an aborted turn's unanswered calls —
@@ -74,6 +75,7 @@ export interface LhMarkerMessage {
 	role: "custom";
 	customType:
 		| "graph-context"
+		| "session-brief"
 		| "probe-handoff"
 		| "subagent-steer"
 		| "subagent-abort"
@@ -346,6 +348,20 @@ export function newGraphContextMessage(picks: readonly GraphContextPick[], chain
 		content: lines.join("\n"),
 		display: true,
 		details: { propositions: picks, chains },
+		timestamp: Date.now(),
+	};
+}
+
+/** The hub's session brief: message[0] of a session started from the hub.
+ *  `content` is what the model reads; `details` feeds the quiet transcript card. */
+export function newSessionBriefMessage(brief: SessionBrief): LhMarkerMessage {
+	return {
+		id: newMessageId(),
+		role: "custom",
+		customType: "session-brief",
+		content: sessionBriefText(brief),
+		display: true,
+		details: brief,
 		timestamp: Date.now(),
 	};
 }
@@ -688,6 +704,15 @@ export function toLlmMessages(messages: readonly AgentMessage[]): Message[] {
 		(messages[0] as { role?: string } | undefined)?.role === "system" ? (messages[0] as Message) : null;
 	const out: Message[] = [];
 	if (leading) out.push(leading);
+	// The session brief outlives the compaction cut: its goal, concept slugs
+	// and mode rules hold for the whole session, and a summary may paraphrase
+	// the slugs the teacher must tag checks with.
+	for (let i = 0; i < start; i++) {
+		const m = lhMessages[i]!;
+		if (m.role === "custom" && m.customType === "session-brief") {
+			out.push({ role: "user", content: [{ type: "text", text: m.content }], timestamp: m.timestamp });
+		}
+	}
 	if (head) out.push(head);
 	for (let i = leading ? Math.max(start, 1) : start; i < messages.length; i++) {
 		const m = messages[i]!;
@@ -988,7 +1013,7 @@ export function nativeInputCause(message: AgentMessage, history: readonly AgentM
 	if (message.role === "custom") {
 		if (["probe-handoff", "subagent-steer", "subagent-abort"].includes(message.customType)) return "automatic";
 		if (["practice-thinking", "plugin-problem-submission", "practice-next"].includes(message.customType)) return "learner";
-		return ["graph-context", "plan-block", "problem-dismissed", "compaction", "side-question", "side-question-told"].includes(message.customType) ? "neutral" : "unrecognizable";
+		return ["graph-context", "session-brief", "plan-block", "problem-dismissed", "compaction", "side-question", "side-question-told"].includes(message.customType) ? "neutral" : "unrecognizable";
 	}
 	if (message.role === "toolResult") {
 		const pluginAnswer = readPluginQuestionAnswer(message.details);

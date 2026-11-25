@@ -96,6 +96,7 @@ import { PluginProblemSubmitted } from "./plugin-problem-submitted";
 import { readPluginProblemSubmission, pluginProblemById } from "@/src/core";
 import { ThinkingCard, ProblemCard, type PracticeThinkingData } from "@/components/practice-cards";
 import { GraphContextCard, type GraphContextData } from "@/components/graph-context-card";
+import { SessionBriefCard } from "@/components/session-brief-card";
 import { TopBar } from "@/components/top-bar";
 import { PluginSessionTopBarActions } from "@/components/plugin-chrome";
 import { usePluginShortcutPage } from "@/components/plugin-shortcuts";
@@ -1802,6 +1803,8 @@ export function Chat({
 										switch (part.type) {
 											case "data-graph-context":
 												return <GraphContextCard key={pi} data={part.data as GraphContextData} />;
+											case "data-session-brief":
+												return <SessionBriefCard key={pi} data={part.data} />;
 											case "data-compaction":
 												return <CompactionMomentDivider key={pi} data={part.data as CompactionDividerData} />;
 											case "data-compaction-cut":

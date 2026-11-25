@@ -25,6 +25,10 @@ core tool surface must appear in real data here.
   2026-10-10): graph-context (the bracketed preamble), problem ×2,
   practice-thinking ×2, conclude ×2, practice-next, problem-dismissed — the
   full marker cycle of a practice session, including the dismissal.
+- `chats/chat_mwvd5f6u_3cd47f7a.json` — a hub-started deep dive, written by
+  `startHubSession` (2026-11-25): origin with `skipProbe: false` and the
+  session-brief marker as message[0], before any turn.
+- `hub/` — the hub state and evidence that session was started from.
 - `graph/` — the real ledgers: nodes (282 lines), chains (160), sessions (8),
   coverage (93), sources (4), render-settings, positions.
 - `jobs/` — five records covering kind × status: research done + aborted by

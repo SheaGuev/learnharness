@@ -48,6 +48,7 @@ const { danglingQuestionOf, activeProblemOf } = await import("../src/core/native
 
 const TEACH = "chat_mv27rrra_feff23b6";
 const PRACTICE = "chat_mv293wv5_10656952";
+const HUB_START = "chat_mwvd5f6u_3cd47f7a";
 
 function snapshotTree(dir: string): Map<string, Buffer> {
 	const out = new Map<string, Buffer>();
@@ -67,13 +68,14 @@ test.after(() => {
 
 // ── chats: records, folds, and the wire ─────────────────────────────────────
 
-test("chats: both fixture records parse through the production read path", () => {
+test("chats: every fixture record parses through the production read path", () => {
 	const list = chatStore.listChats();
 	const ids = new Set(list.map((c) => c.id));
 	assert.ok(ids.has(TEACH), "the teach master record lists");
 	assert.ok(ids.has(PRACTICE), "the practice lifecycle record lists");
+	assert.ok(ids.has(HUB_START), "the hub-started record lists");
 
-	for (const id of [TEACH, PRACTICE]) {
+	for (const id of [TEACH, PRACTICE, HUB_START]) {
 		const r = chatStore.getChat(id);
 		assert.ok(r, `${id} reads`);
 		assert.ok(Array.isArray(r!.messages) && r!.messages.length > 0);
@@ -85,7 +87,7 @@ test("chats: both fixture records parse through the production read path", () =>
 });
 
 test("chats: the LLM wire flattening turns each full record into a legal provider message list", () => {
-	for (const id of [TEACH, PRACTICE]) {
+	for (const id of [TEACH, PRACTICE, HUB_START]) {
 		const r = chatStore.getChat(id)!;
 		const wire = toLlmMessages(r.messages as never);
 		assert.ok(wire.length > 0);
@@ -116,6 +118,7 @@ test("markers: the fixture pair covers EVERY custom-marker kind of the current c
 	// fixture data fails here — extend the fixtures in the same commit.
 	const EXPECTED = [
 		"graph-context",
+		"session-brief",
 		"probe-handoff",
 		"subagent-steer",
 		"subagent-abort",
@@ -126,7 +129,7 @@ test("markers: the fixture pair covers EVERY custom-marker kind of the current c
 		"compaction",
 	] as const;
 	const seen = new Set<string>();
-	for (const id of [TEACH, PRACTICE]) {
+	for (const id of [TEACH, PRACTICE, HUB_START]) {
 		for (const m of chatStore.getChat(id)!.messages) {
 			if ((m as { role?: string }).role === "custom") seen.add((m as { customType: string }).customType);
 		}
