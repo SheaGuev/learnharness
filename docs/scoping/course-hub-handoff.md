@@ -1,6 +1,19 @@
 # Course hub: handoff for the next agents
 
-Branch `feat/course-hub` on the fork `SheaGuev/learnharness` (upstream `amosblomqvist/learnharness`, based on `069a6a11`, app 0.7.0). Updated 2026-11-24, after commit `1a400133`.
+Branch `feat/course-hub` on the fork `SheaGuev/learnharness` (upstream `amosblomqvist/learnharness`, based on `069a6a11`, app 0.7.0). Updated 2026-11-25, after commit `83dbf706`.
+
+## Status (2026-11-25)
+
+T1, T2 and T3 are merged into `feat/course-hub` (merges `6c565fe4`, `2b501f64`, `67770eab`; follow-up fix `83dbf706`).
+
+- **Checked in the dev server:**
+  - The hub is the home screen, and creating a topic and lesson works.
+  - "New session" on a lesson calls `POST /api/hub/start`, links the chat with `origin`, writes the session brief, and opens the chat.
+  - A deep dive with no evidence probes. An Explain start sets `skipProbe` and lists at the `plan` phase.
+- **Not checked:** turn-level behaviour (teacher on turn 1, the model honouring the brief's slugs). The dev data has no model slots configured.
+- **Gap:** the lesson card has Continue, New session, Practice and Go deeper, but no Explain or Ask buttons yet, so Explain is only reachable through the API.
+- **Next tasks:** T4 and T5 (see below), plus Explain/Ask entry points in the hub UI.
+- **Type-check gotcha:** with the `session-brief` marker in the message union, `capturePluginSessionView` hit TS2589 (instantiation too deep). It now widens through `unknown`, like its other branch (`src/core/plugin-view-context.ts`). Expect this class of error when adding message types.
 
 ## The goal
 
@@ -77,11 +90,13 @@ Specs and background live in the owner's Obsidian vault (readable on this machin
 
 Each task lists the files it owns. Tasks that share files must not run in parallel.
 
+T1–T3 are done (see Status). Their rows stay for file-ownership reference.
+
 | ID | Task | Owns | Depends on | Parallel with |
 | --- | --- | --- | --- | --- |
-| **T1** | Hub UI (P1b) | `components/hub/*` (new), `app/page.tsx`, `components/home.tsx`, sidebar entry | P1 (done) | T2, T3, T5 |
-| **T2** | Session start + lesson brief | `app/api/hub/start/route.ts` (new), `src/server/hub.ts`, `src/core/native-messages.ts` (marker), `src/core/view.ts`, golden fixtures | P1 | T1, T5 |
-| **T3** | Skip-probe routing (`startsInTeach`) | `src/server/chat-handler.ts`, `src/core/phases.ts`, `src/store/chats.ts:111`, `components/chat.tsx`, `app/chat/[id]/page.tsx` | P1 | T1, T5 |
+| **T1** (done) | Hub UI (P1b) | `components/hub/*` (new), `app/page.tsx`, `components/home.tsx`, sidebar entry | P1 (done) | T2, T3, T5 |
+| **T2** (done) | Session start + lesson brief | `app/api/hub/start/route.ts` (new), `src/server/hub.ts`, `src/core/native-messages.ts` (marker), `src/core/view.ts`, golden fixtures | P1 | T1, T5 |
+| **T3** (done) | Skip-probe routing (`startsInTeach`) | `src/server/chat-handler.ts`, `src/core/phases.ts`, `src/store/chats.ts:111`, `components/chat.tsx`, `app/chat/[id]/page.tsx` | P1 | T1, T5 |
 | **T4** | `tutor` agent kind for Ask mode | `src/agent/teacher-agent.ts`, `src/agent/tools.ts`, `src/agent/prompt-segments.ts`, `src/core/prompt-segments.ts`, compaction, settings prompt tabs, `src/agent/prompts/tutor/` (new) | **T3** (shares chat-handler) | T1 |
 | **T5** | `report_outcome` tool → evidence + explore items | new tool module under `src/agent/tools/`, registration in `src/agent/tools.ts`, `src/server/hub.ts` writer | P1 | T1, T3; **not** with T4 (`tools.ts`) or T2 (`server/hub.ts`) unless coordinated |
 | **T6** | Planner agent + explore queue from the graph (P3) | new agent kind | T4 | none |
