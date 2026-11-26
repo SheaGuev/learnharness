@@ -1,6 +1,10 @@
 # Course hub: handoff for the next agents
 
-Branch `feat/course-hub` on the fork `SheaGuev/learnharness` (upstream `amosblomqvist/learnharness`, based on `069a6a11`, app 0.7.0). Updated 2026-11-26, after the T6 planner half.
+Branch `main` on the fork `SheaGuev/learnharness`. Upstream is `amosblomqvist/learnharness`, based on `069a6a11`, app 0.7.0. Updated 2026-11-26, after the T6 planner half.
+
+**Branching (2026-11-26):** the hub is now the fork's `main` and default branch. `main` was fast-forwarded to the hub work at `f6305bae`. Treat this fork as its own project:
+- Cut feature branches from `main`; `feat/course-hub` is historical.
+- Upstream stays the `upstream` remote. Merge `upstream/main` in only when you want a LearnHarness release, and expect conflicts in the hub-touched files listed below.
 
 ## Status (2026-11-26): T6 planner
 
