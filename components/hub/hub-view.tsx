@@ -8,13 +8,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import type { HubAction, HubLesson, HubMilestone, HubPlan, HubTopic } from "@/src/core";
+import { milestoneSections, type HubAction, type HubLesson, type HubMilestone, type HubPlan, type HubTopic } from "@/src/core";
 import { hubEdit, startHubSession, useHub, type HubData } from "./hub-data";
 import { HubForms, type HubCreated, type HubDialogState } from "./hub-forms";
 import {
 	ConceptDot, ConceptDots, DotLegend, LessonStatusBadge, NOT_YET, ProgressBar, SectionHeading, SessionList, STATUS_LABEL,
 } from "./hub-parts";
-import { childTopics, descendantTopicIds, lessonConcepts, lessonPrompt, topicLessons, topicPath, topicProgress, type LessonMode } from "./hub-tree";
+import { childTopics, lessonConcepts, lessonPrompt, topicLessons, topicPath, topicProgress, type LessonMode } from "./hub-tree";
 
 export type HubNav =
 	| { screen: "home" }
@@ -613,8 +613,10 @@ function MilestoneScreen({ ctx, plan, milestone }: { ctx: Ctx; plan: HubPlan; mi
 	const next = progress?.nextLessonId ?? null;
 	const topicById = new Map(state.topics.map((t) => [t.id, t]));
 	const topics = milestone.topicIds.flatMap((id) => topicById.get(id) ?? []);
-	const covered = new Set(topics.flatMap((t) => [...descendantTopicIds(state.topics, t.id)]));
-	const picked = milestone.lessonIds.flatMap((id) => state.lessons.find((l) => l.id === id && !covered.has(l.topicId)) ?? []);
+	const lessonById = new Map(state.lessons.map((l) => [l.id, l]));
+	const sections = milestoneSections(state, milestone);
+	const lessonsOf = (ids: readonly string[]) => ids.flatMap((id) => lessonById.get(id) ?? []);
+	const picked = lessonsOf(sections.find((sec) => sec.topicId === null)?.lessonIds ?? []);
 	const sessions = (data.planSessions[plan.id] ?? []).filter((s) => s.origin?.milestoneId === milestone.id);
 	const index = plan.milestones.findIndex((m) => m.id === milestone.id);
 
@@ -641,12 +643,14 @@ function MilestoneScreen({ ctx, plan, milestone }: { ctx: Ctx; plan: HubPlan; mi
 			)}
 
 			{topics.map((topic) => {
-				const ids = descendantTopicIds(state.topics, topic.id);
-				const lessons = state.lessons.filter((l) => ids.has(l.topicId))
-					.sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt));
+				const lessons = lessonsOf(sections.find((sec) => sec.topicId === topic.id)?.lessonIds ?? []);
 				const lessonIds = new Set(lessons.map((l) => l.id));
 				const roots = lessons.filter((l) => l.parentLessonId === null || !lessonIds.has(l.parentLessonId));
-				const tp = topicProgress(state, data.mastery, topic.id);
+				const sectionConcepts = [...new Set(lessons.flatMap((l) => l.conceptIds))];
+				const tp = {
+					solid: sectionConcepts.filter((id) => data.mastery.concepts[id]?.status === "solid").length,
+					total: sectionConcepts.length,
+				};
 				return (
 					<section key={topic.id} className="mb-8" data-testid="hub-milestone-topic">
 						<SectionHeading action={tp.total > 0 ? <ProgressBar solid={tp.solid} total={tp.total} className="w-40" /> : undefined}>

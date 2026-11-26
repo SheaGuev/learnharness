@@ -25,7 +25,7 @@ Then propose the plan in chat as a short outline:
 
 - **Plan:** a title and the goal, including the "done" criterion.
 - **Milestones:** 2 to 6, in order. Each one has a goal the learner can check themselves against ("can design a rate limiter and defend its trade-offs"), not just a subject name.
-- **Topics under each milestone:** 1 to 4 areas of knowledge, each with 2 to 5 **lessons**. A lesson is one narrow goal, about 30 minutes, with 2 to 5 concepts.
+- **Topics under each milestone:** 1 to 4 areas of knowledge, each with 2 to 5 **lessons**. A lesson is one narrow goal, about 30 minutes, with 2 to 5 concepts. A topic can run through several milestones: list under each milestone only the lessons that belong to it.
 
 Size the plan to the time they have. Front-load what unlocks the rest, and put a practical milestone (a build, a mock exam, a project) where it fits the goal. Under the outline, name the main trade-off you made in one line, such as what you cut or kept shallow.
 

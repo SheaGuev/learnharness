@@ -71,10 +71,28 @@ function records(raw: Rec, key: string): Rec[] {
 	return v.map((item, i) => (isRec(item) ? item : fail(`Hub data: ${key}[${i}] is not an object.`)));
 }
 
-/** Lowercase plan-map slug grammar: a-z, 0-9, hyphen and underscore. */
+function shortHash(text: string): string {
+	let h = 0x811c9dc5;
+	for (const ch of text) {
+		h ^= ch.codePointAt(0) ?? 0;
+		h = Math.imul(h, 0x01000193) >>> 0;
+	}
+	return h.toString(36).padStart(7, "0").slice(-7);
+}
+
+/**
+ * Lowercase plan-map slug grammar: a-z, 0-9, hyphen and underscore.
+ * Accents fold to their base letter. Letters the grammar can't hold
+ * (Persian, Greek, CJK…) would otherwise vanish and make different titles
+ * collide, so such titles get a hash of the original appended.
+ */
 export function slugify(title: string): string {
-	const slug = title.toLowerCase().replace(/[^a-z0-9_]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
-	return slug || "concept";
+	const folded = title.normalize("NFKD").replace(/\p{M}+/gu, "").toLowerCase();
+	const base = folded.replace(/[^a-z0-9_]+/g, "-").replace(/^-+|-+$/g, "");
+	const lost = /[^a-z0-9_\s\p{P}\p{S}]/u.test(folded);
+	if (!lost) return base.slice(0, 60) || "concept";
+	const prefix = base.slice(0, 52).replace(/-+$/, "");
+	return `${prefix || "concept"}-${shortHash(title.normalize("NFC").trim().toLowerCase())}`;
 }
 
 export function emptyHubState(): HubState {

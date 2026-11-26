@@ -1,5 +1,6 @@
 import type { HubLesson, HubPlan, HubState, HubTopic } from "./contracts/hub.ts";
 import { applyHubAction, HubDataError, slugify, type HubAction, type HubEditContext, type MilestoneDraft } from "./hub.ts";
+import { milestoneSections } from "./hub-mastery.ts";
 
 /** A whole plan as the planner proposes it: milestones → topics → lessons → concept titles. */
 export interface PlanDraft {
@@ -22,6 +23,16 @@ export interface PlanDraftResult {
 	state: HubState;
 	planId: string;
 	created: { topics: number; lessons: number };
+}
+
+function uniqueBySlug(concepts: { title: string }[]): { title: string }[] {
+	const seen = new Set<string>();
+	return concepts.filter((c) => {
+		const slug = slugify(c.title);
+		if (seen.has(slug)) return false;
+		seen.add(slug);
+		return true;
+	});
 }
 
 function sameTitle(a: string, b: string): boolean {
@@ -49,6 +60,7 @@ export function applyPlanDraft(state: HubState, draft: PlanDraft, planId: string
 	if (planId && !existingPlan) throw new HubDataError("The plan this session was planning no longer exists.");
 
 	const milestones: MilestoneDraft[] = draft.milestones.map((m) => {
+		const lessonIds: string[] = [];
 		const topicIds = m.topics.map((t) => {
 			const topic = resolveTopic(current, t);
 			let topicId: string;
@@ -61,25 +73,32 @@ export function applyPlanDraft(state: HubState, draft: PlanDraft, planId: string
 			}
 			for (const l of t.lessons) {
 				const lesson = resolveLesson(current, topicId, l);
-				const concepts = l.concepts.filter((c) => c.trim()).map((title) => ({ title }));
+				const concepts = uniqueBySlug(l.concepts.filter((c) => c.trim()).map((title) => ({ title })));
 				if (!lesson) {
-					act({ type: "lesson.create", topicId, title: l.title, goal: l.goal, concepts, prereqLessonIds: [], parentLessonId: null });
+					const id = act({ type: "lesson.create", topicId, title: l.title, goal: l.goal, concepts, prereqLessonIds: [], parentLessonId: null });
+					if (id) lessonIds.push(id);
 					created.lessons++;
 					continue;
 				}
-				const known = new Set(lesson.conceptIds.flatMap((id) => current.concepts.find((c) => c.id === id)?.slug ?? []));
+				// The draft is the lesson's whole concept list: detach what it dropped (the concept and its evidence stay in the hub).
+				const wanted = new Set(concepts.map((c) => slugify(c.title)));
+				const slugOf = (id: string) => current.concepts.find((c) => c.id === id)?.slug;
+				const known = new Set(lesson.conceptIds.flatMap((id) => slugOf(id) ?? []));
 				const addConcepts = concepts.filter((c) => !known.has(slugify(c.title)));
+				const removeConceptIds = lesson.conceptIds.filter((id) => !wanted.has(slugOf(id) ?? ""));
 				act({
 					type: "lesson.update", id: lesson.id, title: l.title, goal: l.goal,
 					...(lesson.topicId !== topicId ? { topicId } : {}),
 					...(addConcepts.length ? { addConcepts } : {}),
+					...(removeConceptIds.length ? { removeConceptIds } : {}),
 				});
+				lessonIds.push(lesson.id);
 			}
 			return topicId;
 		});
 		const previous = existingPlan?.milestones.find((x) => (m.id ? x.id === m.id : sameTitle(x.title, m.title)));
 		return {
-			title: m.title, goal: m.goal, topicIds, lessonIds: previous?.lessonIds ?? [],
+			title: m.title, goal: m.goal, topicIds: [...new Set(topicIds)], lessonIds: [...new Set(lessonIds)],
 			...(previous ? { id: previous.id } : {}),
 		};
 	});
@@ -115,15 +134,17 @@ function resolveLesson(state: HubState, topicId: string, l: { id?: string; title
 /** The plan as text with every id, for the planner to read back and revise. */
 export function planOutline(state: HubState, plan: HubPlan): string {
 	const topicById = new Map(state.topics.map((t) => [t.id, t]));
+	const lessonById = new Map(state.lessons.map((l) => [l.id, l]));
 	const lines = [`Plan "${plan.title}" (id ${plan.id}). Goal: ${plan.goal}`];
 	plan.milestones.forEach((m, i) => {
 		lines.push(`${i + 1}. Milestone "${m.title}" (id ${m.id})${m.goal ? `. Goal: ${m.goal}` : ""}`);
-		for (const topicId of m.topicIds) {
-			const topic = topicById.get(topicId);
-			if (!topic) continue;
-			lines.push(`   - Topic "${topic.title}" (id ${topic.id})`);
-			for (const l of state.lessons.filter((x) => x.topicId === topicId).sort((a, b) => a.order - b.order)) {
-				const concepts = l.conceptIds.flatMap((id) => state.concepts.find((c) => c.id === id)?.title ?? []);
+		for (const section of milestoneSections(state, m)) {
+			const topic = section.topicId ? topicById.get(section.topicId) : undefined;
+			lines.push(topic ? `   - Topic "${topic.title}" (id ${topic.id})` : "   - Other lessons");
+			for (const id of section.lessonIds) {
+				const l = lessonById.get(id);
+				if (!l) continue;
+				const concepts = l.conceptIds.flatMap((cid) => state.concepts.find((c) => c.id === cid)?.title ?? []);
 				lines.push(`     - Lesson "${l.title}" (id ${l.id}): ${l.goal}${concepts.length ? ` [${concepts.join("; ")}]` : ""}`);
 			}
 		}

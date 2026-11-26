@@ -89,19 +89,42 @@ function topicSubtree(state: HubState, topicId: string): string[] {
 	return out;
 }
 
+/** One group of a milestone's lessons: a topic's, or hand-picked lessons outside its topics (topicId null). */
+export interface MilestoneSection {
+	topicId: string | null;
+	lessonIds: string[];
+}
+
 /**
- * A milestone's lessons in study order: hand-picked lessons first, then
- * every lesson of its topics (subtopics included), each topic in lesson order.
+ * A milestone's lessons grouped by topic, in study order. A topic brings
+ * only the lessons the milestone lists from it (subtopics included), so one
+ * topic can be split across milestones; a topic with none listed brings all
+ * of its lessons. Listed lessons outside every topic form a last section.
  */
-export function milestoneLessonIds(state: HubState, milestone: Pick<HubMilestone, "topicIds" | "lessonIds">): string[] {
-	const ids = [...milestone.lessonIds];
+export function milestoneSections(state: HubState, milestone: Pick<HubMilestone, "topicIds" | "lessonIds">): MilestoneSection[] {
+	const topicOf = new Map(state.lessons.map((l) => [l.id, l.topicId]));
+	const listed = milestone.lessonIds.filter((id) => topicOf.has(id));
+	const claimed = new Set<string>();
+	const sections: MilestoneSection[] = [];
 	for (const topicId of milestone.topicIds) {
-		for (const id of topicSubtree(state, topicId)) {
-			const lessons = state.lessons.filter((l) => l.topicId === id).sort((a, b) => a.order - b.order);
-			for (const l of lessons) if (!ids.includes(l.id)) ids.push(l.id);
-		}
+		const subtree = topicSubtree(state, topicId);
+		const inTopic = new Set(subtree);
+		const picked = listed.filter((id) => inTopic.has(topicOf.get(id) ?? "") && !claimed.has(id));
+		const lessonIds = picked.length > 0
+			? picked
+			: subtree.flatMap((id) => state.lessons.filter((l) => l.topicId === id).sort((x, y) => x.order - y.order).map((l) => l.id))
+				.filter((id) => !claimed.has(id));
+		lessonIds.forEach((id) => claimed.add(id));
+		sections.push({ topicId, lessonIds });
 	}
-	return ids;
+	const rest = listed.filter((id) => !claimed.has(id));
+	if (rest.length > 0) sections.push({ topicId: null, lessonIds: rest });
+	return sections;
+}
+
+/** A milestone's lessons in study order, section by section. */
+export function milestoneLessonIds(state: HubState, milestone: Pick<HubMilestone, "topicIds" | "lessonIds">): string[] {
+	return milestoneSections(state, milestone).flatMap((s) => s.lessonIds);
 }
 
 function progressOf(lessonIds: readonly string[], state: HubState, concepts: Record<string, ConceptMastery>, lessons: Record<string, LessonProgress>) {

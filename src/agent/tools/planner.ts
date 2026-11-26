@@ -28,14 +28,18 @@ const lessonDraft = Type.Object({
 	id: Type.Optional(Type.String({ description: "An existing lesson id from read_hub or an earlier save_plan, to update it instead of creating one." })),
 	title: Type.String({ minLength: 1 }),
 	goal: Type.String({ minLength: 1, description: "One narrow goal: what the learner can do after this lesson (about 30 minutes)." }),
-	concepts: Type.Array(Type.String({ minLength: 1 }), { description: "2 to 5 concept titles. Mastery is tracked on these." }),
+	concepts: Type.Array(Type.String({ minLength: 1 }), {
+		description: "2 to 5 concept titles, in any script. Mastery is tracked on these. This list replaces the lesson's concepts.",
+	}),
 });
 
 const topicDraft = Type.Object({
 	id: Type.Optional(Type.String({ description: "An existing topic id, to reuse it. Without one, a topic with the same title is reused or a new one is made." })),
 	title: Type.String({ minLength: 1 }),
 	summary: Type.Optional(Type.String()),
-	lessons: Type.Array(lessonDraft, { description: "The lessons this milestone needs from this topic, in study order." }),
+	lessons: Type.Array(lessonDraft, {
+		description: "The lessons this milestone needs from this topic, in study order. The milestone shows only these, so one topic can be split across milestones.",
+	}),
 });
 
 const savePlanInput = Type.Object({
@@ -105,8 +109,9 @@ export function savePlanTool(ctx: PlannerToolContext): AgentTool<typeof savePlan
 		description:
 			"Save the plan the learner agreed to into the learning hub: milestones, each with topics, each with lessons and concepts. " +
 			"The first call creates the plan; later calls in this session revise it. Always send the whole plan. Pass the ids the " +
-			"result gives back to keep milestones, topics and lessons. Topics and lessons are never deleted: leaving one out only " +
-			"removes it from the plan.",
+			"result gives back to keep milestones, topics and lessons. A topic can appear in several milestones, each listing " +
+			"its own lessons from it. Topics, lessons and concepts are never deleted: leaving one out only removes it from the " +
+			"plan, milestone or lesson.",
 		parameters: savePlanInput,
 		execute: serverExecute("save_plan", savePlanInput, async (input) => {
 			const record = ctx.chatStore.getChat(ctx.chatId);

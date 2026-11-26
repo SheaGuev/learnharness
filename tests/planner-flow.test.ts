@@ -26,9 +26,9 @@ const TMP_DATA = fs.mkdtempSync(path.join(os.tmpdir(), "lh-planner-flow-"));
 process.env.LH_DATA_DIR = TMP_DATA;
 process.env.OPENROUTER_API_KEY ??= "test-key-presence-gate";
 
-const { applyHubAction, emptyHubState, parseHubAction, parseHubState } = await import("../src/core/hub.ts");
+const { applyHubAction, emptyHubState, parseHubAction, parseHubState, slugify } = await import("../src/core/hub.ts");
 const { applyPlanDraft } = await import("../src/core/hub-plan-draft.ts");
-const { milestoneLessonIds, projectMastery } = await import("../src/core/hub-mastery.ts");
+const { milestoneLessonIds, milestoneSections, projectMastery } = await import("../src/core/hub-mastery.ts");
 const { POST: postHubStart } = await import("../app/api/hub/start/route.ts");
 const { hubSnapshot } = await import("../src/server/hub.ts");
 const { handleChatRequest, sessionAgentKind } = await import("../src/server/chat-handler.ts");
@@ -76,7 +76,7 @@ describe("applyPlanDraft", () => {
 		assert.deepEqual(result.created, { topics: 2, lessons: 3 });
 		assert.equal(plan.milestones[0]?.goal, "Explain why the borrow checker rejects a program");
 		assert.equal(plan.milestones[0]?.topicIds.length, 1);
-		assert.deepEqual(plan.milestones[0]?.lessonIds, []);
+		assert.equal(plan.milestones[0]?.lessonIds.length, 2, "a milestone records exactly the draft's lessons");
 		assert.equal(result.state.concepts.length, 5);
 	});
 
@@ -109,6 +109,72 @@ describe("applyPlanDraft", () => {
 	it("refuses an unknown topic id with a message the model can act on", () => {
 		const bad: PlanDraft = { ...draft, milestones: [{ ...draft.milestones[0]!, topics: [{ id: "topic_nope", title: "X", lessons: [] }] }] };
 		assert.throws(() => applyPlanDraft(emptyHubState(), bad, undefined, ctx), /No topic with id "topic_nope"/);
+	});
+});
+
+describe("shared topics and non-Latin concepts", () => {
+	const persian: PlanDraft = {
+		title: "Persian for family visits",
+		goal: "Get through a family dinner in Persian",
+		milestones: [
+			{
+				title: "Sounds and first words", goal: "Greet the family",
+				topics: [
+					{ title: "Script", lessons: [
+						{ title: "Letters, part 1", goal: "Read the first letters", concepts: ["ب پ ت ث", "ا و آ"] },
+						{ title: "Letters, part 2", goal: "Read the next letters", concepts: ["د ذ ر ز ژ", "س ش ص ض"] },
+					] },
+					{ title: "Spoken Persian", lessons: [{ title: "Greetings", goal: "Say hello and goodbye", concepts: ["Salâm"] }] },
+				],
+			},
+			{
+				title: "At the table", goal: "Get through dinner",
+				topics: [{ title: "Spoken Persian", lessons: [{ title: "Taarof", goal: "Handle polite refusals", concepts: ["Taarof"] }] }],
+			},
+		],
+	};
+
+	it("a topic split across milestones shows each milestone only its own lessons", () => {
+		const { state, planId } = applyPlanDraft(emptyHubState(), persian, undefined, ctx);
+		const [first, second] = state.plans.find((p) => p.id === planId)?.milestones ?? [];
+		assert.ok(first && second);
+		const titles = (ids: string[]) => ids.map((id) => state.lessons.find((l) => l.id === id)?.title);
+		assert.deepEqual(titles(milestoneLessonIds(state, first)), ["Letters, part 1", "Letters, part 2", "Greetings"]);
+		assert.deepEqual(titles(milestoneLessonIds(state, second)), ["Taarof"]);
+		assert.equal(state.topics.filter((t) => t.title === "Spoken Persian").length, 1, "the topic is shared, not copied");
+		assert.deepEqual(milestoneSections(state, second).map((sec) => sec.topicId), second.topicIds);
+	});
+
+	it("concepts in a non-Latin script keep distinct slugs and stay with their own lesson", () => {
+		const { state } = applyPlanDraft(emptyHubState(), persian, undefined, ctx);
+		const conceptTitles = (lessonTitle: string) => {
+			const lesson = state.lessons.find((l) => l.title === lessonTitle);
+			return lesson?.conceptIds.map((id) => state.concepts.find((c) => c.id === id)?.title);
+		};
+		assert.deepEqual(conceptTitles("Letters, part 1"), ["ب پ ت ث", "ا و آ"]);
+		assert.deepEqual(conceptTitles("Letters, part 2"), ["د ذ ر ز ژ", "س ش ص ض"]);
+		assert.notEqual(slugify("د ذ ر ز ژ"), slugify("س ش ص ض"));
+		assert.equal(slugify("dâl, zâl"), "dal-zal");
+		assert.equal(slugify("Move semantics"), "move-semantics");
+		for (const c of state.concepts) assert.equal(slugify(c.slug), c.slug, "every slug is stable under slugify");
+	});
+
+	it("re-saving a lesson replaces its concept list and keeps the dropped concept in the hub", () => {
+		const first = applyPlanDraft(emptyHubState(), persian, undefined, ctx);
+		const romanized: PlanDraft = structuredClone(persian);
+		romanized.milestones[0]!.topics[0]!.lessons[0]!.concepts = ["be, pe, te, se", "alef, vâv"];
+		const again = applyPlanDraft(first.state, romanized, first.planId, ctx);
+		const lesson = again.state.lessons.find((l) => l.title === "Letters, part 1");
+		assert.deepEqual(lesson?.conceptIds.map((id) => again.state.concepts.find((c) => c.id === id)?.title), ["be, pe, te, se", "alef, vâv"]);
+		assert.ok(again.state.concepts.some((c) => c.title === "ب پ ت ث"), "the detached concept and its evidence stay");
+	});
+
+	it("a hand-built milestone with a topic and no listed lessons still brings the whole topic", () => {
+		const { state } = applyPlanDraft(emptyHubState(), persian, undefined, ctx);
+		const spoken = state.topics.find((t) => t.title === "Spoken Persian");
+		assert.ok(spoken);
+		const ids = milestoneLessonIds(state, { topicIds: [spoken.id], lessonIds: [] });
+		assert.equal(ids.length, 2);
 	});
 });
 
