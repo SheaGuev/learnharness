@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { HUB_MODES, titleFromPrompt, type ChatSummary, type HubMastery, type HubMode, type HubState, type SessionOrigin } from "../core/contracts.ts";
 import { applyHubAction, HubDataError, parseHubAction, type HubEditContext } from "../core/hub.ts";
 import { checkEvidenceFromChat } from "../core/hub-evidence.ts";
-import { projectMastery } from "../core/hub-mastery.ts";
+import { milestoneLessonIds, projectMastery } from "../core/hub-mastery.ts";
 import { decideProbe, type ProbeDecision, type SessionBrief, type SessionBriefConcept } from "../core/hub-session.ts";
 import { newSessionBriefMessage } from "../core/native-messages.ts";
 import { hubStore } from "../store/hub.ts";
@@ -23,6 +23,8 @@ export interface HubSnapshot {
 	lessonSessions: Record<string, ChatSummary[]>;
 	/** Sessions linked to a topic but no lesson (for example Ask sessions). */
 	topicSessions: Record<string, ChatSummary[]>;
+	/** Sessions linked to a plan but no lesson or topic, such as planner sessions and milestone Asks. */
+	planSessions: Record<string, ChatSummary[]>;
 }
 
 function editContext(): HubEditContext {
@@ -65,12 +67,14 @@ export function hubSnapshot(now: Date = new Date()): HubSnapshot {
 
 	const lessonSessions: Record<string, ChatSummary[]> = {};
 	const topicSessions: Record<string, ChatSummary[]> = {};
+	const planSessions: Record<string, ChatSummary[]> = {};
 	for (const chat of linked) {
 		if (chat.origin?.lessonId) push(lessonSessions, chat.origin.lessonId, chat);
 		else if (chat.origin?.topicId) push(topicSessions, chat.origin.topicId, chat);
+		else if (chat.origin?.planId) push(planSessions, chat.origin.planId, chat);
 	}
 	const mastery = projectMastery(state, hubStore.readEvidence(), now, new Set(Object.keys(lessonSessions)));
-	return { state, mastery, lessonSessions, topicSessions };
+	return { state, mastery, lessonSessions, topicSessions, planSessions };
 }
 
 /** Apply one validated edit from an untrusted body. */
@@ -106,7 +110,7 @@ export function adoptChat(body: unknown): { lessonId: string; createdLesson: boo
 	if (!chatId) throw new HubRequestError("chatId is required.", 400);
 	const chat = chatStore.getChat(chatId);
 	if (!chat) throw new HubRequestError("That session no longer exists.", 404);
-	const mode: HubMode = chat.kind === "practice" ? "practice" : chat.kind === "tutor" ? "ask" : "deep-dive";
+	const mode: HubMode = chat.kind === "practice" ? "practice" : chat.kind === "tutor" ? "ask" : chat.kind === "planner" ? "plan" : "deep-dive";
 
 	const lessonId = optionalId(body, "lessonId");
 	if (lessonId) {
@@ -152,13 +156,24 @@ export interface HubStartResult {
 	probe: ProbeDecision;
 }
 
+function chatKindFor(mode: HubMode): "practice" | "tutor" | "planner" | undefined {
+	switch (mode) {
+		case "practice": return "practice";
+		case "ask": return "tutor";
+		case "plan": return "planner";
+		default: return undefined;
+	}
+}
+
 /**
- * Start a hub session: `{ mode, lessonId?, topicId?, planId?, prompt?, probe? }`.
+ * Start a hub session: `{ mode, lessonId?, topicId?, planId?, milestoneId?, prompt?, probe? }`.
  * The new chat carries its origin (with `skipProbe` from the probe policy)
  * and a session-brief marker as message[0]. `probe` is the learner's
  * override of the policy and only counts for deep dives. `prompt` titles
  * the session and is its goal when no lesson is given; the learner's first
- * message is still sent as a normal turn.
+ * message is still sent as a normal turn. A `plan` start opens the planner:
+ * with no planId it builds a new plan, with one it revises that plan (or
+ * only `milestoneId` of it).
  */
 export function startHubSession(body: unknown, now: Date = new Date()): HubStartResult {
 	if (!isRec(body)) throw new HubRequestError("The request must be an object.", 400);
@@ -177,30 +192,53 @@ export function startHubSession(body: unknown, now: Date = new Date()): HubStart
 	const topic = topicId ? state.topics.find((t) => t.id === topicId) : undefined;
 	if (topicId && !topic) throw new HubRequestError("That topic no longer exists.", 404);
 	const planId = optionalId(body, "planId");
-	if (planId && !state.plans.some((p) => p.id === planId)) throw new HubRequestError("That plan no longer exists.", 404);
-	if (!lesson && !topic && !prompt) throw new HubRequestError("Give a lesson, a topic or a prompt.", 400);
+	const plan = planId ? state.plans.find((p) => p.id === planId) : undefined;
+	if (planId && !plan) throw new HubRequestError("That plan no longer exists.", 404);
+	const milestoneId = optionalId(body, "milestoneId");
+	if (milestoneId && !plan) throw new HubRequestError("A milestone start needs its planId.", 400);
+	const milestone = milestoneId ? plan?.milestones.find((m) => m.id === milestoneId) : undefined;
+	if (milestoneId && !milestone) throw new HubRequestError("That milestone no longer exists.", 404);
+	if (mode === "plan" ? !plan && !prompt : !lesson && !topic && !milestone && !prompt) {
+		throw new HubRequestError(mode === "plan" ? "Give a goal or a plan to revise." : "Give a lesson, a topic, a milestone or a prompt.", 400);
+	}
 
 	const probe = decideProbe({ mode, state, concepts: mastery.concepts, lesson, topicId, probe: probeChoice });
 	const lessonById = new Map(state.lessons.map((l) => [l.id, l]));
-	const ownIds = lesson ? lesson.conceptIds : state.concepts.filter((c) => c.topicId === topicId).map((c) => c.id);
+	const ownIds = mode === "plan"
+		? []
+		: lesson
+			? lesson.conceptIds
+			: topicId
+				? state.concepts.filter((c) => c.topicId === topicId).map((c) => c.id)
+				: milestone
+					? milestoneLessonIds(state, milestone).flatMap((id) => lessonById.get(id)?.conceptIds ?? [])
+					: [];
 	const prereqIds = lesson ? lesson.prereqLessonIds.flatMap((id) => lessonById.get(id)?.conceptIds ?? []) : [];
 
-	const goal = lesson?.goal || prompt || topic?.title || "";
+	const goal = mode === "plan"
+		? prompt || milestone?.goal || plan?.goal || ""
+		: lesson?.goal || prompt || milestone?.goal || milestone?.title || topic?.title || "";
 	const brief: SessionBrief = {
 		mode, goal, probe: probe.probe, probeReason: probe.reason,
 		...(lesson ? { lessonTitle: lesson.title } : {}),
 		...(topic ? { topicTitle: topic.title } : {}),
-		concepts: briefConcepts(state, mastery, ownIds, prereqIds),
+		...(plan ? { planTitle: plan.title } : {}),
+		...(milestone ? { milestoneTitle: milestone.title } : {}),
+		concepts: briefConcepts(state, mastery, [...new Set(ownIds)], prereqIds),
 	};
 	const origin: SessionOrigin = {
 		mode,
 		...(lesson ? { lessonId: lesson.id } : {}),
 		...(topicId ? { topicId } : {}),
 		...(planId ? { planId } : {}),
-		...(mode === "practice" ? {} : { skipProbe: !probe.probe }),
+		...(milestone ? { milestoneId: milestone.id } : {}),
+		...(mode === "practice" || mode === "plan" ? {} : { skipProbe: !probe.probe }),
 	};
 
-	const chat = chatStore.createChat(titleFromPrompt(lesson?.title ?? prompt ?? topic?.title ?? ""), mode === "practice" ? "practice" : mode === "ask" ? "tutor" : undefined, origin);
+	const title = mode === "plan" && plan
+		? `Plan: ${milestone?.title ?? plan.title}`
+		: lesson?.title ?? prompt ?? milestone?.title ?? topic?.title ?? "";
+	const chat = chatStore.createChat(titleFromPrompt(title), chatKindFor(mode), origin);
 	chatStore.saveMessages(chat.id, [newSessionBriefMessage(brief)]);
 	// Same birth stamp as POST /api/chats: a session owns the strong slot's model from creation.
 	const strong = readSettings()?.models?.strong;

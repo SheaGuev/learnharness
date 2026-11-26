@@ -15,8 +15,9 @@ export type HubDialogState =
 	| { kind: "topic"; parentId: string | null; edit?: HubTopic }
 	| { kind: "lesson"; topicId: string; edit?: HubLesson; parentLessonId?: string; seedConcepts?: HubConcept[]; seedTitle?: string }
 	| { kind: "plan"; edit?: HubPlan }
+	| { kind: "planner"; planId?: string; milestoneId?: string; about?: string }
 	| { kind: "adopt"; lessonId?: string; topicId?: string }
-	| { kind: "ask"; topicId: string; lessonId?: string; about: string };
+	| { kind: "ask"; topicId?: string; lessonId?: string; planId?: string; milestoneId?: string; about: string };
 
 export type HubCreated = { kind: "topic" | "lesson" | "plan"; id: string };
 
@@ -222,7 +223,7 @@ function LessonForm({ data, topicId, edit, parentLessonId, seedConcepts, seedTit
 	);
 }
 
-interface MilestoneRow { key: string; id?: string; title: string; lessonIds: string[] }
+interface MilestoneRow { key: string; id?: string; title: string; goal: string; topicIds: string[]; lessonIds: string[] }
 
 function move<T>(list: readonly T[], from: number, to: number): T[] {
 	if (to < 0 || to >= list.length) return [...list];
@@ -236,12 +237,14 @@ function PlanForm({ data, edit, onClose, onCreated }: { data: HubData; edit?: Hu
 	const [title, setTitle] = useState(edit?.title ?? "");
 	const [goal, setGoal] = useState(edit?.goal ?? "");
 	const [milestones, setMilestones] = useState<MilestoneRow[]>(
-		edit?.milestones.map((m) => ({ key: m.id, id: m.id, title: m.title, lessonIds: m.lessonIds })) ?? [{ key: "m0", title: "", lessonIds: [] }],
+		edit?.milestones.map((m) => ({ key: m.id, id: m.id, title: m.title, goal: m.goal ?? "", topicIds: m.topicIds, lessonIds: m.lessonIds }))
+			?? [{ key: "m0", title: "", goal: "", topicIds: [], lessonIds: [] }],
 	);
 	const { busy, error, run } = useSubmit(onClose);
 	const lessonById = new Map(data.state.lessons.map((l) => [l.id, l]));
 	const topicById = new Map(data.state.topics.map((t) => [t.id, t]));
 	const used = new Set(milestones.flatMap((m) => m.lessonIds));
+	const topicLabels = topicOptions(data.state.topics);
 
 	const update = (key: string, change: (m: MilestoneRow) => MilestoneRow) =>
 		setMilestones(milestones.map((m) => (m.key === key ? change(m) : m)));
@@ -250,8 +253,11 @@ function PlanForm({ data, edit, onClose, onCreated }: { data: HubData; edit?: Hu
 		<HubDialog open title={edit ? "Edit plan" : "New plan"} onClose={onClose} busy={busy} testId="hub-plan-form">
 			<form onSubmit={run(async () => {
 				const drafts = milestones
-					.filter((m) => m.title.trim() || m.lessonIds.length > 0)
-					.map((m, i) => ({ title: m.title.trim() || `Milestone ${i + 1}`, lessonIds: m.lessonIds, ...(m.id ? { id: m.id } : {}) }));
+					.filter((m) => m.title.trim() || m.lessonIds.length > 0 || m.topicIds.length > 0)
+					.map((m, i) => ({
+						title: m.title.trim() || `Milestone ${i + 1}`, topicIds: m.topicIds, lessonIds: m.lessonIds,
+						...(m.goal.trim() ? { goal: m.goal.trim() } : {}), ...(m.id ? { id: m.id } : {}),
+					}));
 				if (edit) {
 					await hubEdit({ type: "plan.update", id: edit.id, title, goal, milestones: drafts });
 					return;
@@ -276,6 +282,32 @@ function PlanForm({ data, edit, onClose, onCreated }: { data: HubData; edit?: Hu
 								<Button type="button" variant="ghost" size="icon-sm" aria-label="Move milestone down" onClick={() => setMilestones(move(milestones, mi, mi + 1))} disabled={mi === milestones.length - 1}><ArrowDownIcon /></Button>
 								<Button type="button" variant="ghost" size="icon-sm" aria-label="Remove milestone" onClick={() => setMilestones(milestones.filter((x) => x.key !== m.key))}><XIcon /></Button>
 							</div>
+							<Input value={m.goal} onChange={(e) => update(m.key, (x) => ({ ...x, goal: e.target.value }))} placeholder="What you can do once this milestone is done (optional)" className="mt-2 h-8" data-testid="hub-milestone-goal" />
+							{m.topicIds.length > 0 && (
+								<ul className="mt-2 flex flex-wrap gap-1.5 pl-6" data-testid="hub-milestone-topics">
+									{m.topicIds.map((id) => (
+										<li key={id} className="flex items-center gap-1 rounded-md border border-border bg-background py-0.5 pl-2 pr-0.5 text-sm">
+											{topicById.get(id)?.title ?? "Missing topic"}
+											<button type="button" aria-label="Remove topic" onClick={() => update(m.key, (x) => ({ ...x, topicIds: x.topicIds.filter((t) => t !== id) }))}
+												className="rounded-sm p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground">
+												<XIcon className="size-3" />
+											</button>
+										</li>
+									))}
+								</ul>
+							)}
+							<select
+								className={`${SELECT_CLASS} mt-2 h-8 text-muted-foreground`}
+								value=""
+								data-testid="hub-milestone-add-topic"
+								onChange={(e) => {
+									const id = e.target.value;
+									if (id) update(m.key, (x) => ({ ...x, topicIds: [...x.topicIds, id] }));
+								}}
+							>
+								<option value="">{topicLabels.length ? "Add a topic (all its lessons)…" : "Create a topic first"}</option>
+								{topicLabels.filter((o) => !m.topicIds.includes(o.id)).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+							</select>
 							{m.lessonIds.length > 0 && (
 								<ol className="mt-2 flex flex-col gap-0.5 pl-6">
 									{m.lessonIds.map((id, li) => (
@@ -297,14 +329,14 @@ function PlanForm({ data, edit, onClose, onCreated }: { data: HubData; edit?: Hu
 									if (id) update(m.key, (x) => ({ ...x, lessonIds: [...x.lessonIds, id] }));
 								}}
 							>
-								<option value="">{data.state.lessons.length ? "Add a lesson…" : "Create lessons in a topic first"}</option>
+								<option value="">{data.state.lessons.length ? "Add a single lesson…" : "Create lessons in a topic first"}</option>
 								{data.state.lessons.filter((l) => !used.has(l.id)).map((l) => (
 									<option key={l.id} value={l.id}>{l.title} ({topicById.get(l.topicId)?.title ?? "?"})</option>
 								))}
 							</select>
 						</div>
 					))}
-					<Button type="button" variant="outline" size="sm" className="self-start" onClick={() => setMilestones([...milestones, { key: `m${Date.now()}`, title: "", lessonIds: [] }])}>
+					<Button type="button" variant="outline" size="sm" className="self-start" onClick={() => setMilestones([...milestones, { key: `m${Date.now()}`, title: "", goal: "", topicIds: [], lessonIds: [] }])}>
 						<PlusIcon /> Milestone
 					</Button>
 				</div>
@@ -361,14 +393,19 @@ function AdoptForm({ data, lessonId, topicId, onClose }: { data: HubData; lesson
 	);
 }
 
-function AskForm({ topicId, lessonId, about, onClose }: { topicId: string; lessonId?: string; about: string; onClose: () => void }) {
+function AskForm({ topicId, lessonId, planId, milestoneId, about, onClose }: {
+	topicId?: string; lessonId?: string; planId?: string; milestoneId?: string; about: string; onClose: () => void;
+}) {
 	const router = useRouter();
 	const [question, setQuestion] = useState("");
 	const { busy, error, run } = useSubmit(() => {});
 	return (
 		<HubDialog open title={`Ask about ${about}`} onClose={onClose} busy={busy} testId="hub-ask-form">
 			<form onSubmit={run(async () => {
-				const id = await startHubSession({ mode: "ask", topicId, ...(lessonId ? { lessonId } : {}), title: question, prompt: question });
+				const id = await startHubSession({
+					mode: "ask", ...(topicId ? { topicId } : {}), ...(lessonId ? { lessonId } : {}),
+					...(planId ? { planId } : {}), ...(milestoneId ? { milestoneId } : {}), title: question, prompt: question,
+				});
 				router.push(`/chat/${id}`);
 			})}>
 				<Field label="Question">
@@ -382,8 +419,44 @@ function AskForm({ topicId, lessonId, about, onClose }: { topicId: string; lesso
 	);
 }
 
-export function HubForms({ dialog, data, onClose, onCreated }: {
-	dialog: HubDialogState | null; data: HubData; onClose: () => void; onCreated: (c: HubCreated) => void;
+function PlannerForm({ planId, milestoneId, about, onClose, onManual }: {
+	planId?: string; milestoneId?: string; about?: string; onClose: () => void; onManual: () => void;
+}) {
+	const router = useRouter();
+	const [text, setText] = useState("");
+	const { busy, error, run } = useSubmit(() => {});
+	const revising = planId !== undefined;
+	const title = !revising ? "Plan something new" : milestoneId ? `Plan the milestone ${about ?? ""}`.trim() : `Revise ${about ?? "this plan"}`;
+	return (
+		<HubDialog open title={title} onClose={onClose} busy={busy} testId="hub-planner-form">
+			<form onSubmit={run(async () => {
+				const fallback = milestoneId ? "Help me flesh out this milestone." : "Help me revise this plan.";
+				const prompt = text.trim() || (revising ? fallback : "");
+				if (!prompt) throw new Error("Say in a sentence what you want to learn.");
+				const id = await startHubSession({
+					mode: "plan", ...(planId ? { planId } : {}), ...(milestoneId ? { milestoneId } : {}),
+					title: prompt, prompt,
+				});
+				router.push(`/chat/${id}`);
+			})}>
+				<Field label={revising ? "What should change?" : "What do you want to learn?"}>
+					<Textarea value={text} onChange={(e) => setText(e.target.value)} required={!revising} autoFocus data-testid="hub-planner-goal"
+						placeholder={revising ? "e.g. I have less time now; cut it to six weeks" : "e.g. Get comfortable enough with Rust to build a CLI tool"} />
+				</Field>
+				<p className="mb-3 text-sm text-muted-foreground">
+					{revising
+						? "The planner reads the plan as it is now and changes it with you."
+						: "The planner asks a few questions about your goal, time and background, proposes milestones and lessons, and saves the plan once you agree."}
+				</p>
+				<Footer busy={busy} error={error} submit={revising ? "Open the planner" : "Start planning"} onCancel={onClose}
+					extra={!revising && <Button type="button" variant="link" size="sm" className="px-0" onClick={onManual} data-testid="hub-plan-manual">Build by hand</Button>} />
+			</form>
+		</HubDialog>
+	);
+}
+
+export function HubForms({ dialog, data, onClose, onCreated, onOpen }: {
+	dialog: HubDialogState | null; data: HubData; onClose: () => void; onCreated: (c: HubCreated) => void; onOpen: (dialog: HubDialogState) => void;
 }) {
 	if (!dialog) return null;
 	switch (dialog.kind) {
@@ -401,6 +474,8 @@ export function HubForms({ dialog, data, onClose, onCreated }: {
 		case "adopt":
 			return <AdoptForm data={data} lessonId={dialog.lessonId} topicId={dialog.topicId} onClose={onClose} />;
 		case "ask":
-			return <AskForm topicId={dialog.topicId} lessonId={dialog.lessonId} about={dialog.about} onClose={onClose} />;
+			return <AskForm topicId={dialog.topicId} lessonId={dialog.lessonId} planId={dialog.planId} milestoneId={dialog.milestoneId} about={dialog.about} onClose={onClose} />;
+		case "planner":
+			return <PlannerForm planId={dialog.planId} milestoneId={dialog.milestoneId} about={dialog.about} onClose={onClose} onManual={() => onOpen({ kind: "plan" })} />;
 	}
 }

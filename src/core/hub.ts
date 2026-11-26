@@ -109,7 +109,11 @@ function parseLesson(r: Rec): HubLesson {
 
 function parseMilestone(r: Rec): HubMilestone {
 	const w = "Milestone";
-	return { id: reqStr(r, "id", w), title: reqStr(r, "title", w), lessonIds: strList(r, "lessonIds", w) };
+	const goal = optStr(r, "goal", w);
+	return {
+		id: reqStr(r, "id", w), title: reqStr(r, "title", w), topicIds: strList(r, "topicIds", w), lessonIds: strList(r, "lessonIds", w),
+		...(goal ? { goal } : {}),
+	};
 }
 
 function parsePlan(r: Rec): HubPlan {
@@ -200,7 +204,10 @@ export function assertHubIntegrity(state: HubState): void {
 	}
 	for (const p of state.plans) {
 		uniqueIds(p.milestones, `milestone in plan "${p.title}"`);
-		for (const m of p.milestones) for (const id of m.lessonIds) if (!lessonIds.has(id)) fail(`Plan "${p.title}" references a missing lesson.`);
+		for (const m of p.milestones) {
+			for (const id of m.lessonIds) if (!lessonIds.has(id)) fail(`Plan "${p.title}" references a missing lesson.`);
+			for (const id of m.topicIds) if (!topicIds.has(id)) fail(`Plan "${p.title}" references a missing topic.`);
+		}
 	}
 	for (const e of state.explore) {
 		if (e.topicId !== undefined && !topicIds.has(e.topicId)) fail(`Explore item "${e.title}" points at a missing topic.`);
@@ -215,10 +222,12 @@ export function parseSessionOrigin(raw: unknown): SessionOrigin | undefined {
 	const lessonId = optStr(raw, "lessonId", w);
 	const topicId = optStr(raw, "topicId", w);
 	const planId = optStr(raw, "planId", w);
+	const milestoneId = optStr(raw, "milestoneId", w);
 	const skipProbe = raw.skipProbe === undefined ? undefined : bool(raw, "skipProbe", false, w);
 	return {
 		mode: oneOf(raw, "mode", HUB_MODES, w),
 		...(lessonId ? { lessonId } : {}), ...(topicId ? { topicId } : {}), ...(planId ? { planId } : {}),
+		...(milestoneId ? { milestoneId } : {}),
 		...(skipProbe !== undefined ? { skipProbe } : {}),
 	};
 }
@@ -244,7 +253,7 @@ export function parseEvidence(raw: unknown): HubEvidence | null {
 // ─── edits ────────────────────────────────────────────────────────────────
 
 export interface ConceptDraft { title: string; slug?: string }
-export interface MilestoneDraft { id?: string; title: string; lessonIds: string[] }
+export interface MilestoneDraft { id?: string; title: string; goal?: string; topicIds?: string[]; lessonIds: string[] }
 
 export type HubAction =
 	| { type: "topic.create"; title: string; summary?: string; parentId: string | null }
@@ -269,7 +278,11 @@ function conceptDrafts(r: Rec, key: string, where: string): ConceptDraft[] {
 function milestoneDrafts(r: Rec, where: string): MilestoneDraft[] {
 	return records(r, "milestones").map((m) => {
 		const id = optStr(m, "id", where);
-		return { title: reqStr(m, "title", where), lessonIds: strList(m, "lessonIds", where), ...(id ? { id } : {}) };
+		const goal = optStr(m, "goal", where);
+		return {
+			title: reqStr(m, "title", where), topicIds: strList(m, "topicIds", where), lessonIds: strList(m, "lessonIds", where),
+			...(id ? { id } : {}), ...(goal ? { goal } : {}),
+		};
 	});
 }
 
@@ -376,7 +389,10 @@ function resolveConcepts(state: HubState, topicId: string, drafts: readonly Conc
 }
 
 function milestonesFrom(drafts: readonly MilestoneDraft[], ctx: HubEditContext): HubMilestone[] {
-	return drafts.map((m) => ({ id: m.id ?? ctx.newId("milestone"), title: m.title, lessonIds: [...m.lessonIds] }));
+	return drafts.map((m) => ({
+		id: m.id ?? ctx.newId("milestone"), title: m.title, topicIds: [...new Set(m.topicIds ?? [])], lessonIds: [...m.lessonIds],
+		...(m.goal ? { goal: m.goal } : {}),
+	}));
 }
 
 export interface HubEditResult {
@@ -422,6 +438,10 @@ function applyUnchecked(state: HubState, action: HubAction, ctx: HubEditContext)
 				state: {
 					...state,
 					topics: state.topics.filter((t) => t.id !== action.id),
+					plans: state.plans.map((p) => ({
+						...p,
+						milestones: p.milestones.map((m) => ({ ...m, topicIds: m.topicIds.filter((id) => id !== action.id) })),
+					})),
 					explore: state.explore.map((e) => (e.topicId === action.id ? withoutKey(e, "topicId") : e)),
 				},
 			};

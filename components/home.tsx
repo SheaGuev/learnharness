@@ -25,12 +25,13 @@ import type { TurnUsage } from "@/src/core";
 /**
  * Home — the learning hub is the main view; the knowledge graph is the
  * secondary "Map" view (`/?view=map`), full-bleed edge to edge. Hub screens
- * are addressed by `?topic=` and `?plan=` so browser history walks them.
+ * are addressed by `?topic=`, `?plan=` and `?plan=&milestone=` so browser history walks them.
  * The header and the new-session dock float over both views.
  */
 function hubHref(nav: HubNav): string {
 	if (nav.screen === "topic") return `/?topic=${encodeURIComponent(nav.id)}`;
 	if (nav.screen === "plan") return `/?plan=${encodeURIComponent(nav.id)}`;
+	if (nav.screen === "milestone") return `/?plan=${encodeURIComponent(nav.planId)}&milestone=${encodeURIComponent(nav.id)}`;
 	return "/";
 }
 

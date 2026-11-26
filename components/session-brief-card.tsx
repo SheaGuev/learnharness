@@ -10,6 +10,7 @@ const MODE_LABELS: Record<SessionBrief["mode"], string> = {
 	explain: "Explain",
 	"deep-dive": "Deep dive",
 	practice: "Practice",
+	plan: "Plan",
 };
 
 function isBrief(value: unknown): value is SessionBrief {
@@ -34,7 +35,7 @@ export function SessionBriefCard({ data }: { data: unknown }) {
 				<ChevronRightIcon aria-hidden="true" className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")} />
 				<span className="font-medium">{MODE_LABELS[data.mode]}</span>
 				<span className="min-w-0 flex-1 truncate">
-					{data.lessonTitle ?? data.topicTitle ?? data.goal}
+					{data.lessonTitle ?? data.milestoneTitle ?? data.topicTitle ?? data.planTitle ?? data.goal}
 					{start ? ` · ${start}` : ""}
 				</span>
 			</button>

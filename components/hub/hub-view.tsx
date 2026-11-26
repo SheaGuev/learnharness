@@ -8,15 +8,19 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import type { HubAction, HubLesson, HubPlan, HubTopic } from "@/src/core";
+import type { HubAction, HubLesson, HubMilestone, HubPlan, HubTopic } from "@/src/core";
 import { hubEdit, startHubSession, useHub, type HubData } from "./hub-data";
 import { HubForms, type HubCreated, type HubDialogState } from "./hub-forms";
 import {
 	ConceptDot, ConceptDots, DotLegend, LessonStatusBadge, NOT_YET, ProgressBar, SectionHeading, SessionList, STATUS_LABEL,
 } from "./hub-parts";
-import { childTopics, lessonConcepts, lessonPrompt, topicLessons, topicPath, topicProgress, type LessonMode } from "./hub-tree";
+import { childTopics, descendantTopicIds, lessonConcepts, lessonPrompt, topicLessons, topicPath, topicProgress, type LessonMode } from "./hub-tree";
 
-export type HubNav = { screen: "home" } | { screen: "topic"; id: string } | { screen: "plan"; id: string };
+export type HubNav =
+	| { screen: "home" }
+	| { screen: "topic"; id: string }
+	| { screen: "plan"; id: string }
+	| { screen: "milestone"; planId: string; id: string };
 
 interface Ctx {
 	data: HubData;
@@ -52,6 +56,10 @@ export function HubView({ nav, onNavigate }: { nav: HubNav; onNavigate: (nav: Hu
 	} else if (nav.screen === "plan") {
 		const plan = data.state.plans.find((p) => p.id === nav.id);
 		body = plan ? <PlanScreen ctx={ctx} plan={plan} /> : <Missing what="plan" ctx={ctx} />;
+	} else if (nav.screen === "milestone") {
+		const plan = data.state.plans.find((p) => p.id === nav.planId);
+		const milestone = plan?.milestones.find((m) => m.id === nav.id);
+		body = plan && milestone ? <MilestoneScreen ctx={ctx} plan={plan} milestone={milestone} /> : <Missing what="milestone" ctx={ctx} />;
 	} else {
 		body = <HomeScreen ctx={ctx} />;
 	}
@@ -62,7 +70,7 @@ export function HubView({ nav, onNavigate }: { nav: HubNav; onNavigate: (nav: Hu
 				{error && <p role="alert" className="mb-4 text-sm text-error">{error}</p>}
 				{body}
 			</div>
-			<HubForms dialog={dialog} data={data} onClose={() => setDialog(null)} onCreated={onCreated} />
+			<HubForms dialog={dialog} data={data} onClose={() => setDialog(null)} onCreated={onCreated} onOpen={setDialog} />
 		</div>
 	);
 }
@@ -140,7 +148,7 @@ function HomeScreen({ ctx }: { ctx: Ctx }) {
 	const actions = (
 		<div className="mb-8 flex flex-wrap gap-2">
 			<Button size="sm" variant="outline" onClick={() => ctx.open({ kind: "topic", parentId: null })} data-testid="hub-new-topic"><FolderPlusIcon /> New topic</Button>
-			<Button size="sm" variant="outline" onClick={() => ctx.open({ kind: "plan" })} disabled={state.lessons.length === 0} title={state.lessons.length ? undefined : "Create a lesson first"} data-testid="hub-new-plan"><RouteIcon /> New plan</Button>
+			<Button size="sm" variant="outline" onClick={() => ctx.open({ kind: "planner" })} data-testid="hub-new-plan"><RouteIcon /> New plan</Button>
 			<Button size="sm" variant="outline" onClick={() => ctx.open({ kind: "adopt" })} disabled={state.topics.length === 0} title={state.topics.length ? undefined : "Create a topic first"} data-testid="hub-adopt"><LinkIcon /> Add a session</Button>
 		</div>
 	);
@@ -149,8 +157,17 @@ function HomeScreen({ ctx }: { ctx: Ctx }) {
 		return (
 			<div data-testid="hub-empty">
 				<Title sub="Plans, topics and lessons live here, outside any one chat. Each lesson gets fresh sessions, and what you show in its checks builds up your mastery.">Learning hub</Title>
+				<div className="mb-4 rounded-xl border border-border p-6" data-testid="hub-empty-plan">
+					<h2 className="text-lg font-semibold">Plan what you want to learn</h2>
+					<p className="mt-2 text-base text-muted-foreground">
+						The planner asks about your goal, time and background, then builds a plan with you: milestones, the topics under each, and small lessons.
+					</p>
+					<Button className="mt-5" onClick={() => ctx.open({ kind: "planner" })} data-testid="hub-empty-plan-button">
+						<RouteIcon /> Plan with the planner
+					</Button>
+				</div>
 				<div className="rounded-xl border border-dashed border-border p-6">
-					<h2 className="text-lg font-semibold">Start with a topic</h2>
+					<h2 className="text-lg font-semibold">Or start with a topic</h2>
 					<ol className="mt-3 flex list-decimal flex-col gap-1.5 pl-5 text-base text-muted-foreground">
 						<li>Create a topic for something you want to learn.</li>
 						<li>Add lessons to it, each with one goal and a few concepts.</li>
@@ -490,12 +507,40 @@ function LessonCard({ ctx, lesson, all, planId, highlight = false }: {
 
 // ─── plan ───────────────────────────────────────────────────────────────────
 
+function NextLessonButton({ ctx, lessonId, planId, starter }: {
+	ctx: Ctx; lessonId: string | null | undefined; planId: string; starter: ReturnType<typeof useStart>;
+}) {
+	const lesson = lessonId ? ctx.data.state.lessons.find((l) => l.id === lessonId) : undefined;
+	if (!lesson) return null;
+	const latest = ctx.data.lessonSessions[lesson.id]?.[0];
+	return (
+		<Button size="sm" disabled={starter.busy} data-testid="hub-next-lesson"
+			onClick={() => (latest ? starter.openChat(latest.id) : starter.start(lessonStart(ctx.data, lesson, "deep-dive", planId)))}>
+			<PlayIcon /> {latest ? "Continue" : "Start"}: {lesson.title}
+		</Button>
+	);
+}
+
+function TopicChips({ ctx, topicIds }: { ctx: Ctx; topicIds: readonly string[] }) {
+	const topicById = new Map(ctx.data.state.topics.map((t) => [t.id, t]));
+	const topics = topicIds.flatMap((id) => topicById.get(id) ?? []);
+	if (topics.length === 0) return null;
+	return (
+		<span className="flex flex-wrap gap-1.5">
+			{topics.map((t) => (
+				<span key={t.id} className="rounded-md border border-border/70 px-1.5 py-0.5 font-ui text-xs text-muted-foreground">{t.title}</span>
+			))}
+		</span>
+	);
+}
+
 function PlanScreen({ ctx, plan }: { ctx: Ctx; plan: HubPlan }) {
 	const { data } = ctx;
 	const edit = useEdit();
+	const starter = useStart();
 	const lessonById = new Map(data.state.lessons.map((l) => [l.id, l]));
 	const progress = data.mastery.plans[plan.id];
-	const next = progress?.nextLessonId ?? null;
+	const planning = (data.planSessions[plan.id] ?? []).filter((s) => s.origin?.milestoneId === undefined);
 
 	return (
 		<div data-testid="hub-plan">
@@ -503,47 +548,137 @@ function PlanScreen({ ctx, plan }: { ctx: Ctx; plan: HubPlan }) {
 			<Title sub={plan.goal}>{plan.title}</Title>
 			{progress && <ProgressBar solid={progress.solid} total={progress.total} className="mb-4 max-w-sm" />}
 			<div className="mb-8 flex flex-wrap gap-2">
-				<Button size="sm" variant="outline" onClick={() => ctx.open({ kind: "plan", edit: plan })} data-testid="hub-edit-plan"><PencilIcon /> Edit</Button>
+				<NextLessonButton ctx={ctx} lessonId={progress?.nextLessonId} planId={plan.id} starter={starter} />
+				<Button size="sm" variant="outline" onClick={() => ctx.open({ kind: "planner", planId: plan.id, about: plan.title })} data-testid="hub-revise-plan">
+					<SparklesIcon /> Revise with planner
+				</Button>
+				<Button size="sm" variant="ghost" onClick={() => ctx.open({ kind: "plan", edit: plan })} data-testid="hub-edit-plan"><PencilIcon /> Edit</Button>
 				<Button size="sm" variant="ghost" onClick={() => edit.run({ type: "plan.update", id: plan.id, archived: !plan.archived })}>
 					<ArchiveIcon /> {plan.archived ? "Unarchive" : "Archive"}
 				</Button>
 				<ConfirmButton label="Delete" onConfirm={() => edit.run({ type: "plan.delete", id: plan.id }, () => ctx.navigate({ screen: "home" }))} />
 			</div>
+			{starter.error && <p role="alert" className="-mt-5 mb-6 text-sm text-error">{starter.error}</p>}
 			{edit.error && <p role="alert" className="-mt-5 mb-6 text-sm text-error">{edit.error}</p>}
 
 			{plan.milestones.length === 0 ? (
-				<p className="text-sm text-muted-foreground">No milestones yet. Edit the plan to add some.</p>
+				<p className="text-sm text-muted-foreground">No milestones yet. Revise the plan with the planner, or edit it to add some.</p>
 			) : (
 				<ol className="flex flex-col" data-testid="hub-milestones">
 					{plan.milestones.map((m, i) => {
-						const lessons = m.lessonIds.flatMap((id) => {
-							const l = lessonById.get(id);
-							return l ? [l] : [];
-						});
-						const done = lessons.length > 0 && lessons.every((l) => data.mastery.lessons[l.id]?.status === "complete");
+						const mp = progress?.milestones[m.id];
+						const next = mp?.nextLessonId ? lessonById.get(mp.nextLessonId) : undefined;
 						const last = i === plan.milestones.length - 1;
 						return (
 							<li key={m.id} className="relative flex gap-4 pb-6">
 								{!last && <span className="absolute left-[11px] top-7 h-[calc(100%-1.75rem)] w-px bg-border" aria-hidden="true" />}
 								<span className={cn(
-									"relative z-10 flex size-6 shrink-0 items-center justify-center rounded-full border font-ui text-xs",
-									done ? "border-success bg-success text-background" : "border-border bg-background text-muted-foreground",
+									"relative z-10 mt-3 flex size-6 shrink-0 items-center justify-center rounded-full border font-ui text-xs",
+									mp?.complete ? "border-success bg-success text-background" : "border-border bg-background text-muted-foreground",
 								)}>{i + 1}</span>
-								<div className="min-w-0 flex-1">
-									<h3 className="mb-2 font-medium">{m.title}</h3>
-									{lessons.length === 0 ? (
-										<p className="text-sm text-muted-foreground">No lessons in this milestone.</p>
-									) : (
-										<ul className="flex flex-col gap-2">
-											{lessons.map((l) => <LessonCard key={l.id} ctx={ctx} lesson={l} planId={plan.id} highlight={l.id === next} />)}
-										</ul>
-									)}
-								</div>
+								<button type="button" data-testid="hub-milestone-card" onClick={() => ctx.navigate({ screen: "milestone", planId: plan.id, id: m.id })}
+									className="flex min-w-0 flex-1 flex-col gap-1.5 rounded-xl border px-4 py-3 text-left transition-colors hover:bg-accent/50">
+									<span className="flex items-center gap-2">
+										<span className="min-w-0 flex-1 truncate font-medium">{m.title}</span>
+										<ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+									</span>
+									{m.goal && <span className="text-sm text-muted-foreground">{m.goal}</span>}
+									<TopicChips ctx={ctx} topicIds={m.topicIds} />
+									{mp && mp.total > 0 && <ProgressBar solid={mp.solid} total={mp.total} />}
+									{next && !mp?.complete && <span className="truncate font-ui text-xs text-muted-foreground">Next: {next.title}</span>}
+								</button>
 							</li>
 						);
 					})}
 				</ol>
 			)}
+
+			{planning.length > 0 && (
+				<section className="mb-8 mt-2">
+					<SectionHeading>Planning sessions</SectionHeading>
+					<SessionList sessions={planning} empty="" />
+				</section>
+			)}
+		</div>
+	);
+}
+
+// ─── milestone ──────────────────────────────────────────────────────────────
+
+function MilestoneScreen({ ctx, plan, milestone }: { ctx: Ctx; plan: HubPlan; milestone: HubMilestone }) {
+	const { data } = ctx;
+	const { state } = data;
+	const starter = useStart();
+	const progress = data.mastery.plans[plan.id]?.milestones[milestone.id];
+	const next = progress?.nextLessonId ?? null;
+	const topicById = new Map(state.topics.map((t) => [t.id, t]));
+	const topics = milestone.topicIds.flatMap((id) => topicById.get(id) ?? []);
+	const covered = new Set(topics.flatMap((t) => [...descendantTopicIds(state.topics, t.id)]));
+	const picked = milestone.lessonIds.flatMap((id) => state.lessons.find((l) => l.id === id && !covered.has(l.topicId)) ?? []);
+	const sessions = (data.planSessions[plan.id] ?? []).filter((s) => s.origin?.milestoneId === milestone.id);
+	const index = plan.milestones.findIndex((m) => m.id === milestone.id);
+
+	return (
+		<div data-testid="hub-milestone-screen">
+			<Crumbs ctx={ctx} trail={[{ label: plan.title, nav: { screen: "plan", id: plan.id } }]} />
+			<p className="mb-1 font-ui text-xs uppercase tracking-wider text-muted-foreground">Milestone {index + 1} of {plan.milestones.length}</p>
+			<Title sub={milestone.goal}>{milestone.title}</Title>
+			{progress && progress.total > 0 && <ProgressBar solid={progress.solid} total={progress.total} className="mb-4 max-w-sm" />}
+			<div className="mb-8 flex flex-wrap gap-2">
+				<NextLessonButton ctx={ctx} lessonId={next} planId={plan.id} starter={starter} />
+				<Button size="sm" variant="outline" onClick={() => ctx.open({ kind: "ask", planId: plan.id, milestoneId: milestone.id, about: milestone.title })} data-testid="hub-milestone-ask">
+					<MessageCircleQuestionIcon /> Ask
+				</Button>
+				<Button size="sm" variant="outline" onClick={() => ctx.open({ kind: "planner", planId: plan.id, milestoneId: milestone.id, about: milestone.title })} data-testid="hub-milestone-plan">
+					<SparklesIcon /> Plan this milestone
+				</Button>
+				<Button size="sm" variant="ghost" onClick={() => ctx.open({ kind: "plan", edit: plan })}><PencilIcon /> Edit plan</Button>
+			</div>
+			{starter.error && <p role="alert" className="-mt-5 mb-6 text-sm text-error">{starter.error}</p>}
+
+			{topics.length === 0 && picked.length === 0 && (
+				<p className="mb-8 text-sm text-muted-foreground">No topics in this milestone yet. Plan it with the planner, or edit the plan to add topics.</p>
+			)}
+
+			{topics.map((topic) => {
+				const ids = descendantTopicIds(state.topics, topic.id);
+				const lessons = state.lessons.filter((l) => ids.has(l.topicId))
+					.sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt));
+				const lessonIds = new Set(lessons.map((l) => l.id));
+				const roots = lessons.filter((l) => l.parentLessonId === null || !lessonIds.has(l.parentLessonId));
+				const tp = topicProgress(state, data.mastery, topic.id);
+				return (
+					<section key={topic.id} className="mb-8" data-testid="hub-milestone-topic">
+						<SectionHeading action={tp.total > 0 ? <ProgressBar solid={tp.solid} total={tp.total} className="w-40" /> : undefined}>
+							<button type="button" className="hover:text-foreground" onClick={() => ctx.navigate({ screen: "topic", id: topic.id })}>{topic.title}</button>
+						</SectionHeading>
+						{roots.length === 0 ? (
+							<div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+								No lessons in this topic yet.
+								<Button size="xs" variant="outline" className="ml-2" onClick={() => ctx.open({ kind: "lesson", topicId: topic.id })}><PlusIcon /> Lesson</Button>
+							</div>
+						) : (
+							<ul className="flex flex-col gap-2">
+								{roots.map((l) => <LessonCard key={l.id} ctx={ctx} lesson={l} all={lessons} planId={plan.id} highlight={l.id === next} />)}
+							</ul>
+						)}
+					</section>
+				);
+			})}
+
+			{picked.length > 0 && (
+				<section className="mb-8">
+					<SectionHeading>{topics.length > 0 ? "Other lessons" : "Lessons"}</SectionHeading>
+					<ul className="flex flex-col gap-2">
+						{picked.map((l) => <LessonCard key={l.id} ctx={ctx} lesson={l} planId={plan.id} highlight={l.id === next} />)}
+					</ul>
+				</section>
+			)}
+
+			<section className="mb-8">
+				<SectionHeading>Milestone sessions</SectionHeading>
+				<SessionList sessions={sessions} empty="No sessions about this milestone yet. Lesson sessions show on their lesson." />
+			</section>
 		</div>
 	);
 }

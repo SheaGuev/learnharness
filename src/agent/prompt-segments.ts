@@ -52,6 +52,8 @@ const TUTOR_SHARED_FRAGMENTS = ["10-voice.md", "15-accuracy.md", "30-learner-fil
 const CURATED_SHARED: Partial<Record<PromptAgent, readonly string[]>> = {
 	practice: PRACTICE_SHARED_FRAGMENTS,
 	tutor: TUTOR_SHARED_FRAGMENTS,
+	// The planner has the same instruments as the tutor: questions to the learner and the learner files.
+	planner: TUTOR_SHARED_FRAGMENTS,
 };
 
 /** Absolute path for an override file (unchecked — validate first). */
@@ -138,7 +140,7 @@ export function effectivePromptSegments(
 /** Every known segment path across both agents (route validation). */
 export function allSegmentPaths(): string[] {
 	const paths = new Set<string>();
-	for (const agent of ["prober", "teacher", "practice", "tutor"] as const) {
+	for (const agent of ["prober", "teacher", "practice", "tutor", "planner"] as const) {
 		for (const segment of listSourceSegments(agent)) paths.add(segment.path);
 	}
 	return [...paths].sort();

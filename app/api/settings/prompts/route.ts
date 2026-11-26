@@ -6,7 +6,7 @@
  * its source text, override text (if a file exists), and effective switch
  * state (settings record's agent.prompts map AND file presence).
  *
- *   GET → 200 {prober: SegmentInfo[], teacher: SegmentInfo[], practice: SegmentInfo[], tutor: SegmentInfo[]}
+ *   GET → 200 {prober: SegmentInfo[], teacher: SegmentInfo[], practice: SegmentInfo[], tutor: SegmentInfo[], planner: SegmentInfo[]}
  *   SegmentInfo = {path, sourceText, overrideText, enabled, shared}
  *
  * Shared usage is discoverable by path membership in these lists. The
@@ -27,5 +27,6 @@ export async function GET() {
 		teacher: effectivePromptSegments("teacher", switches),
 		practice: effectivePromptSegments("practice", switches),
 		tutor: effectivePromptSegments("tutor", switches),
+		planner: effectivePromptSegments("planner", switches),
 	});
 }

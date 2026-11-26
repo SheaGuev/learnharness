@@ -106,7 +106,7 @@ export interface CompactionDeps {
 	/** provider:id of the engine (usage + marker provenance). */
 	modelId: string;
 	/** The session kind (summarizer wording: teaching vs practice; tutor is the Ask agent). */
-	kind: "teach" | "practice" | "probe" | "tutor";
+	kind: "teach" | "practice" | "probe" | "tutor" | "planner";
 	/** The effective trigger threshold, RESOLVED by the caller:
 	 *  min(settings threshold, contextWindow − reserve) — the owner's
 	 *  effective-trigger ruling. The catalog window lookup is the

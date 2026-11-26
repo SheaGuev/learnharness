@@ -1,5 +1,6 @@
 import type {
-	ConceptMastery, ConceptStatus, HubEvidence, HubMastery, HubState, LessonProgress, LessonStatus, PlanProgress,
+	ConceptMastery, ConceptStatus, HubEvidence, HubMastery, HubMilestone, HubState, LessonProgress, LessonStatus, MilestoneProgress,
+	PlanProgress,
 } from "./contracts/hub.ts";
 
 /** Days until a solid concept is due again; each later pass moves one step along. */
@@ -76,6 +77,41 @@ function lessonProgress(conceptIds: readonly string[], concepts: Record<string, 
 	return { status, solid, total };
 }
 
+/** A topic and its subtopics, depth first in sibling order. */
+function topicSubtree(state: HubState, topicId: string): string[] {
+	const out: string[] = [];
+	const visit = (id: string) => {
+		if (out.includes(id)) return;
+		out.push(id);
+		state.topics.filter((t) => t.parentId === id).sort((a, b) => a.order - b.order).forEach((t) => visit(t.id));
+	};
+	visit(topicId);
+	return out;
+}
+
+/**
+ * A milestone's lessons in study order: hand-picked lessons first, then
+ * every lesson of its topics (subtopics included), each topic in lesson order.
+ */
+export function milestoneLessonIds(state: HubState, milestone: Pick<HubMilestone, "topicIds" | "lessonIds">): string[] {
+	const ids = [...milestone.lessonIds];
+	for (const topicId of milestone.topicIds) {
+		for (const id of topicSubtree(state, topicId)) {
+			const lessons = state.lessons.filter((l) => l.topicId === id).sort((a, b) => a.order - b.order);
+			for (const l of lessons) if (!ids.includes(l.id)) ids.push(l.id);
+		}
+	}
+	return ids;
+}
+
+function progressOf(lessonIds: readonly string[], state: HubState, concepts: Record<string, ConceptMastery>, lessons: Record<string, LessonProgress>) {
+	const lessonById = new Map(state.lessons.map((l) => [l.id, l]));
+	const conceptIds = new Set(lessonIds.flatMap((id) => lessonById.get(id)?.conceptIds ?? []));
+	const solid = [...conceptIds].filter((id) => concepts[id]?.status === "solid").length;
+	const nextLessonId = lessonIds.find((id) => lessons[id]?.status !== "complete") ?? null;
+	return { solid, total: conceptIds.size, nextLessonId };
+}
+
 /**
  * Project mastery for every concept, lesson and plan. `lessonsWithSessions`
  * marks lessons that have at least one linked chat, so a started lesson
@@ -99,14 +135,17 @@ export function projectMastery(
 	const lessons: Record<string, LessonProgress> = {};
 	for (const l of state.lessons) lessons[l.id] = lessonProgress(l.conceptIds, concepts, lessonsWithSessions.has(l.id));
 
-	const lessonById = new Map(state.lessons.map((l) => [l.id, l]));
 	const plans: Record<string, PlanProgress> = {};
 	for (const p of state.plans) {
-		const ordered = p.milestones.flatMap((m) => m.lessonIds);
-		const conceptIds = new Set(ordered.flatMap((id) => lessonById.get(id)?.conceptIds ?? []));
-		const solid = [...conceptIds].filter((id) => concepts[id]?.status === "solid").length;
-		const nextLessonId = ordered.find((id) => lessons[id]?.status !== "complete") ?? null;
-		plans[p.id] = { solid, total: conceptIds.size, nextLessonId };
+		const milestones: Record<string, MilestoneProgress> = {};
+		const ordered: string[] = [];
+		for (const m of p.milestones) {
+			const ids = milestoneLessonIds(state, m);
+			const progress = progressOf(ids, state, concepts, lessons);
+			milestones[m.id] = { ...progress, complete: ids.length > 0 && progress.nextLessonId === null };
+			for (const id of ids) if (!ordered.includes(id)) ordered.push(id);
+		}
+		plans[p.id] = { ...progressOf(ordered, state, concepts, lessons), milestones };
 	}
 	return { concepts, lessons, plans };
 }

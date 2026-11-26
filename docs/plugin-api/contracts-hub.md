@@ -17,7 +17,8 @@ declare const HUB_MODES: readonly [
     "ask",
     "explain",
     "deep-dive",
-    "practice"
+    "practice",
+    "plan"
 ];
 ```
 
@@ -43,6 +44,7 @@ export interface SessionOrigin {
     lessonId?: string;
     topicId?: string;
     planId?: string;
+    milestoneId?: string;
     skipProbe?: boolean;
 }
 ```
@@ -55,6 +57,7 @@ export interface SessionOrigin {
 - [lessonId](#sessionorigin-lessonid)
 - [topicId](#sessionorigin-topicid)
 - [planId](#sessionorigin-planid)
+- [milestoneId](#sessionorigin-milestoneid)
 - [skipProbe](#sessionorigin-skipprobe)
 
 ### SessionOrigin mode
@@ -79,6 +82,14 @@ topicId?: string;
 
 ```ts
 planId?: string;
+```
+
+### SessionOrigin milestoneId
+
+Set on sessions started from one milestone of `planId`.
+
+```ts
+milestoneId?: string;
 ```
 
 ### SessionOrigin skipProbe

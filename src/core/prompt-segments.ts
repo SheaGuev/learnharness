@@ -21,7 +21,7 @@ export const FRAGMENT_RE = /^\d+-[\w.-]+\.md$/;
  *  teaching base, no shared fragments (the doctrine contradicts the
  *  teaching philosophy; its 00-base.md plays the base role). Tutor (Ask
  *  sessions) follows the same pattern with its own curated allowlist. */
-export type PromptAgent = "prober" | "teacher" | "practice" | "tutor";
+export type PromptAgent = "prober" | "teacher" | "practice" | "tutor" | "planner";
 
 /** One segment of one agent's composed prompt. */
 export interface PromptSegmentInfo {
@@ -45,7 +45,7 @@ export interface PromptSegmentInfo {
  *  CURRENT source segment list. */
 export function isValidSegmentPath(segmentPath: string): boolean {
 	if (segmentPath === "system-prompt.md") return true;
-	const m = /^(prober|teacher|practice|tutor|shared)\/([\w.-]+\.md)$/.exec(segmentPath);
+	const m = /^(prober|teacher|practice|tutor|planner|shared)\/([\w.-]+\.md)$/.exec(segmentPath);
 	if (!m || m[2] === undefined) return false;
 	return FRAGMENT_RE.test(m[2]);
 }

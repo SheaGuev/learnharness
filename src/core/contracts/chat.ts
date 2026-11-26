@@ -17,9 +17,10 @@ import type { SessionOrigin } from "./hub.ts";
 /** Session kind: teach is the default when a saved record omits kind.
  * Practice uses the adaptive-practice agent without teaching extraction or
  * graph writes. Tutor is a hub Ask session: an answer-first agent with no
- * probe, plan or quiz, and no extraction. Reading an absent kind does not
- * require a record migration. */
-export type ChatKind = "teach" | "practice" | "tutor";
+ * probe, plan or quiz, and no extraction. Planner is a hub Plan session:
+ * a goal interview that writes a learning plan into the hub, also with no
+ * extraction. Reading an absent kind does not require a record migration. */
+export type ChatKind = "teach" | "practice" | "tutor" | "planner";
 
 /** One persisted native session under data/chats/<id>.json. Messages retain
  * native agent history; transcript rendering groups them into a separate view.

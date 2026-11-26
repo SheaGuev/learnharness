@@ -19,7 +19,7 @@ export function sendToUserApplies(
 	model: { provider: string; id: string },
 	toolsOverridden: boolean,
 ): boolean {
-	return (kind === "prober" || kind === "teacher" || kind === "tutor") && !toolsOverridden && needsSendToUser(model);
+	return (kind === "prober" || kind === "teacher" || kind === "tutor" || kind === "planner") && !toolsOverridden && needsSendToUser(model);
 }
 
 const sendToUserInput = Type.Object({

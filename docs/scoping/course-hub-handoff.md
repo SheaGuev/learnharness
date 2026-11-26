@@ -1,6 +1,19 @@
 # Course hub: handoff for the next agents
 
-Branch `feat/course-hub` on the fork `SheaGuev/learnharness` (upstream `amosblomqvist/learnharness`, based on `069a6a11`, app 0.7.0). Updated 2026-11-25, after merging T4 and T5.
+Branch `feat/course-hub` on the fork `SheaGuev/learnharness` (upstream `amosblomqvist/learnharness`, based on `069a6a11`, app 0.7.0). Updated 2026-11-26, after the T6 planner half.
+
+## Status (2026-11-26): T6 planner
+
+The planner half of T6 is done (spec: `~/Documents/THEVAULT/SPS/SPS/learnharness/Hub P3 Planner.md`):
+- New chat kind `planner` and hub mode `plan`. "New plan" in the hub opens a goal dialog and starts a planner session. The planner interviews the learner about their goal (not their knowledge), proposes milestones → topics → lessons, and writes the plan with `save_plan` (`src/agent/tools/planner.ts`, upsert logic in `src/core/hub-plan-draft.ts`). Prompt: `src/agent/prompts/planner/00-base.md`.
+- `HubMilestone` gained `goal` and `topicIds`. Mastery has per-milestone progress (`mastery.plans[id].milestones`). `GET /api/hub` adds `planSessions`.
+- `POST /api/hub/start` takes `milestoneId` (with `planId`) for Ask, Explain and Plan starts from a milestone.
+- UI: the plan screen lists milestone cards and offers "Revise with planner". The new milestone screen (`?plan=…&milestone=…`) shows the goal, progress, topics with lesson cards, Ask and "Plan this milestone".
+- Tests: `tests/planner-flow.test.ts` (13). In the dev server, a full planner run with a real model asked 5 goal questions, proposed 5 milestones, and saved 6 topics and 21 lessons. The plan and milestone screens rendered.
+- **Known issues, not fixed:**
+  - `tests/plugin-question-native.test.ts` (9) and `tests/plugin-submission-native.test.ts` (1) fail on the base commit too: `reportOutcomeTools` reads `ctx.chatStore.getChat` when a test builds prober tools with no chat store.
+  - Claude models sometimes call `send_to_user` and then repeat the same text as ordinary prose, so the reply shows twice. Seen in a planner session. It can affect every agent that gets `send_to_user` except the teacher, which has the narration guard.
+- **Still open in T6:** the explore queue built from graph neighbours.
 
 ## Status (2026-11-25)
 
@@ -109,7 +122,7 @@ T1–T5 are done (see Status). Their rows stay for file-ownership reference.
 | **T3** (done) | Skip-probe routing (`startsInTeach`) | `src/server/chat-handler.ts`, `src/core/phases.ts`, `src/store/chats.ts:111`, `components/chat.tsx`, `app/chat/[id]/page.tsx` | P1 | T1, T5 |
 | **T4** (done) | `tutor` agent kind for Ask mode | `src/agent/teacher-agent.ts`, `src/agent/tools.ts`, `src/agent/prompt-segments.ts`, `src/core/prompt-segments.ts`, compaction, settings prompt tabs, `src/agent/prompts/tutor/` (new) | **T3** (shares chat-handler) | T1 |
 | **T5** (done) | `report_outcome` tool → evidence + explore items | new tool module under `src/agent/tools/`, registration in `src/agent/tools.ts`, `src/server/hub.ts` writer | P1 | T1, T3; **not** with T4 (`tools.ts`) or T2 (`server/hub.ts`) unless coordinated |
-| **T6** | Planner agent + explore queue from the graph (P3) | new agent kind | T4 | none |
+| **T6** (planner done) | Planner agent + explore queue from the graph (P3) | `src/agent/tools/planner.ts`, `src/core/hub-plan-draft.ts`, `src/agent/prompts/planner/`, milestone screens in `components/hub/*` | T4 | none |
 
 ### T1: Hub UI
 
@@ -165,5 +178,4 @@ A tool for the teacher (and later prober and tutor): `{ summary, concepts: [{ sl
 ## Open questions for the owner
 
 - **Ask sessions:** should they always attach to a topic, or may they float until filed?
-- **Planner (T6):** a conversational session that edits the plan through tools (recommended), or a one-shot outline generator?
 - **Upstream sync cadence:** merge `upstream/main` before each phase?

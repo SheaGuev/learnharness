@@ -16,6 +16,8 @@ import {
 } from "./tools.ts";
 import { practiceTools, createPracticeGate, type PracticeGate, type PracticeToolContext } from "./tools/practice.ts";
 import { createTutorTools } from "./tools/tutor.ts";
+import { createPlannerTools } from "./tools/planner.ts";
+import type { ChatStore } from "../core/ports.ts";
 import { pluginProblemTools, isPluginProblemPoseAcknowledgment, type NativePluginProblemContribution } from "./plugin-problem-tools.ts";
 import { healToolRecord, withArgumentHeal } from "./tools/heal.ts";
 import { sendToUserApplies, sendToUserTool } from "./tools/send-to-user.ts";
@@ -56,7 +58,7 @@ import { PluginQuestionLedger, type NativePluginQuestionContribution } from "./p
 /** Which agent's prompt directory to compose. Practice (2026-10-04) and
  *  tutor compose their own base plus a curated shared appendix — see
  *  prompt-segments.ts. */
-export type AgentKind = "prober" | "teacher" | "practice" | "tutor";
+export type AgentKind = "prober" | "teacher" | "practice" | "tutor" | "planner";
 
 /** Reserve conversation builtins even when role/mechanics/settings gates hide them.
  * New builtin names must join this catalog; actual turn tools are reserved too. */
@@ -104,6 +106,7 @@ const composedInstructions: Record<AgentKind, string> = {
 	teacher: composeInstructions("teacher"),
 	practice: composeInstructions("practice"),
 	tutor: composeInstructions("tutor"),
+	planner: composeInstructions("planner"),
 };
 
 // Money channel (wave 4): the chat-handler passes a per-turn collector;
@@ -206,7 +209,7 @@ function makeQuestionStopper(kind: AgentKind) {
 
 function baseAgentOptions(kind: AgentKind, opts: AgentBuildOptions, tools: AgentTool<any, any>[], nodeExists?: (nodeId: string) => boolean,
 	practice?: { gate: PracticeGate; graphNodes: PracticeToolContext["graphNodes"] }) {
-	// Practice and tutor never reach the role fallback (the handler ALWAYS
+	// Practice, tutor and planner never reach the role fallback (the handler ALWAYS
 	// injects the session's conversation engine — they ride the same
 	// conversation-spec resolution as teaching); the cast keeps AgentKind
 	// ("practice" and "tutor" are not ModelRoles) honest about that.
@@ -228,8 +231,8 @@ function baseAgentOptions(kind: AgentKind, opts: AgentBuildOptions, tools: Agent
 			? [withArgumentHeal(sendToUserTool)]
 			: []),
 	];
-	// Plugins don't extend the tutor: PluginAgentKind has no "tutor" member.
-	const pluginAgent = kind === "tutor" ? undefined : kind;
+	// Plugins don't extend the tutor or planner: PluginAgentKind has neither member.
+	const pluginAgent = kind === "tutor" || kind === "planner" ? undefined : kind;
 	const contributions = opts.tools === undefined && opts.chatId && opts.pluginContributions && pluginAgent
 		? opts.pluginContributions({ chatId: opts.chatId, agent: pluginAgent }, [...CONVERSATION_TOOL_NAMES, ...builtinTools.map(tool => tool.name)])
 		: undefined;
@@ -420,9 +423,19 @@ export function createTutorAgent(opts: AgentBuildOptions = {}) {
 	return baseAgentOptions("tutor", opts, Object.values(opts.tools ?? createTutorTools()));
 }
 
+/**
+ * The PLANNER (hub Plan sessions): built from turn 1 of a kind:"planner"
+ * session. Interviews the learner about their goal and writes the agreed
+ * plan into the hub with save_plan; no probe, plan-map or quiz tools.
+ */
+export function createPlannerAgent(ctx: { chatId: string; chatStore: ChatStore }, opts: AgentBuildOptions = {}) {
+	return baseAgentOptions("planner", opts, Object.values(opts.tools ?? createPlannerTools(ctx)));
+}
+
 export type ProberAgent = ReturnType<typeof createProberAgent>;
 export type TeacherAgent = ReturnType<typeof createTeacherAgent>;
 export type PracticeAgent = ReturnType<typeof createPracticeAgent>;
 export type TutorAgent = ReturnType<typeof createTutorAgent>;
-export type TeachingAgent = ProberAgent | TeacherAgent | PracticeAgent | TutorAgent;
+export type PlannerAgent = ReturnType<typeof createPlannerAgent>;
+export type TeachingAgent = ProberAgent | TeacherAgent | PracticeAgent | TutorAgent | PlannerAgent;
 

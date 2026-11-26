@@ -4,6 +4,7 @@ import {
 	createProberAgent,
 	createTeacherAgent,
 	createTutorAgent,
+	createPlannerAgent,
 	type AgentBuildOptions,
 	type AgentKind,
 	type TeachingAgent,
@@ -81,21 +82,21 @@ import {
 import { steerDelivered } from "../core/contracts.ts";
 import type {CallUsage, ChatRecord} from "../core/contracts.ts";
 
-/** Which agent a record's next turn runs: practice and tutor sessions keep
+/** Which agent a record's next turn runs: practice, tutor and planner sessions keep
  *  their own agent from turn 1; teaching sessions switch prober → teacher
  *  at the probe seam (or start at the teacher when the hub skipped it). */
 export function sessionAgentKind(record: Pick<ChatRecord, "kind" | "messages" | "origin">): AgentKind {
-	if (record.kind === "practice" || record.kind === "tutor") return record.kind;
+	if (record.kind === "practice" || record.kind === "tutor" || record.kind === "planner") return record.kind;
 	return startsInTeach(record) ? "teacher" : "prober";
 }
 
 /** The prompt a record's agent composes, for system-prompt size estimates.
  *  The prober's prompt is close enough to the teacher's for the estimate. */
-function promptAgentFor(record: Pick<ChatRecord, "kind">): "practice" | "tutor" | "teacher" {
-	return record.kind === "practice" || record.kind === "tutor" ? record.kind : "teacher";
+function promptAgentFor(record: Pick<ChatRecord, "kind">): "practice" | "tutor" | "planner" | "teacher" {
+	return record.kind === "practice" || record.kind === "tutor" || record.kind === "planner" ? record.kind : "teacher";
 }
 
-function compactionKindFor(record: Pick<ChatRecord, "kind" | "messages" | "origin">): "practice" | "tutor" | "teach" | "probe" {
+function compactionKindFor(record: Pick<ChatRecord, "kind" | "messages" | "origin">): "practice" | "tutor" | "planner" | "teach" | "probe" {
 	const agent = sessionAgentKind(record);
 	return agent === "teacher" ? "teach" : agent === "prober" ? "probe" : agent;
 }
@@ -760,6 +761,8 @@ export async function handleChatInput(
 		? buildAgent({ ...agentOpts, teaching })
 		: agentKind === "tutor"
 			? createTutorAgent(agentOpts)
+		: agentKind === "planner"
+			? createPlannerAgent({ chatId, chatStore: stores.chatStore }, agentOpts)
 		: agentKind === "practice"
 			? createPracticeAgent(
 					{
@@ -911,7 +914,7 @@ export async function handleChatInput(
 				// PRACTICE (owner, 2026-10-04): practice sessions write nothing —
 				// no extraction, no graph, no coverage (v1: the session itself
 				// is the deliverable). Tutor (Ask) sessions don't extract either.
-				if ((!requestCycle || requestCycle.dispatched) && record.kind !== "practice" && record.kind !== "tutor" && extractionEnabled(effective.graph)) {
+				if ((!requestCycle || requestCycle.dispatched) && record.kind !== "practice" && record.kind !== "tutor" && record.kind !== "planner" && extractionEnabled(effective.graph)) {
 					// Fresh per-turn read of the graph section's chunk budget
 					// (extraction-UX redesign, 2026-09-24): the trigger compares
 					// against it and the pipeline's batches share it.

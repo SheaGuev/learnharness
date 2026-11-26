@@ -58,8 +58,8 @@ export interface PluginTaskRecordStore {
 export interface ChatStore {
 	/** Create a session record (persisted immediately). */
 	/** Create a session record; kind "practice" marks a practice session,
-	 *  "tutor" a hub Ask session (absent = teach, the default). */
-	createChat(title: string, kind?: "practice" | "tutor", origin?: SessionOrigin): ChatRecord;
+	 *  "tutor" a hub Ask session, "planner" a hub Plan session (absent = teach, the default). */
+	createChat(title: string, kind?: "practice" | "tutor" | "planner", origin?: SessionOrigin): ChatRecord;
 	/** Link a session to the hub, or unlink it with null. Not conversation activity. */
 	saveOrigin(id: string, origin: SessionOrigin | null): void;
 	/** The full record, or null if unknown id / corrupt file. */

@@ -134,7 +134,7 @@ interface SegmentInfo {
 	shared: boolean;
 }
 
-type PromptView = Record<"teacher" | "prober" | "practice" | "tutor", SegmentInfo[]>;
+type PromptView = Record<"teacher" | "prober" | "practice" | "tutor" | "planner", SegmentInfo[]>;
 type PromptRow = SegmentInfo & { usageHint?: string };
 
 /** Compose: one tool toggled, the rest of the section carried verbatim.
@@ -280,6 +280,7 @@ export function sectionedSegments(view: PromptView): PromptSection[] {
 		{ id: "prober", label: "Prober" },
 		{ id: "practice", label: "Practice" },
 		{ id: "tutor", label: "Ask" },
+		{ id: "planner", label: "Plan" },
 	] as const;
 	const shared = new Map<string, SegmentInfo>();
 	for (const { id } of agents) {
@@ -520,7 +521,7 @@ export function AgentSection({
 				// Only the acknowledged version changes; don't clear/dim the list
 				// while its ordinary canonical refresh catches up.
 				const update = (segments: SegmentInfo[]) => segments.map(s => s.path === path ? { ...s, enabled: on } : s);
-				setPrompts(view => view && { teacher: update(view.teacher), prober: update(view.prober), practice: update(view.practice), tutor: update(view.tutor) });
+				setPrompts(view => view && { teacher: update(view.teacher), prober: update(view.prober), practice: update(view.practice), tutor: update(view.tutor), planner: update(view.planner) });
 			} else setSwitchError(path);
 			switchingPrompt.current = false;
 			void readPrompts(saved);

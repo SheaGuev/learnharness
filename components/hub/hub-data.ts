@@ -13,6 +13,8 @@ export interface HubData {
 	mastery: HubMastery;
 	lessonSessions: Record<string, ChatSummary[]>;
 	topicSessions: Record<string, ChatSummary[]>;
+	/** Sessions linked to a plan but no lesson or topic (planner sessions, milestone Asks). */
+	planSessions: Record<string, ChatSummary[]>;
 }
 
 type Rec = Record<string, unknown>;
@@ -33,10 +35,11 @@ function toHubData(body: unknown): HubData {
 	if (!isRec(body)) throw new Error("The hub sent an unreadable response.");
 	if (typeof body.error === "string") throw new Error(body.error);
 	const { mastery, lessonSessions, topicSessions } = body;
-	if (!isMastery(mastery) || !isSessionMap(lessonSessions) || !isSessionMap(topicSessions)) {
+	const planSessions = body.planSessions ?? {};
+	if (!isMastery(mastery) || !isSessionMap(lessonSessions) || !isSessionMap(topicSessions) || !isSessionMap(planSessions)) {
 		throw new Error("The hub sent an unreadable response.");
 	}
-	return { state: parseHubState(body.state), mastery, lessonSessions, topicSessions };
+	return { state: parseHubState(body.state), mastery, lessonSessions, topicSessions, planSessions };
 }
 
 function errorText(body: unknown, fallback: string): string {
@@ -131,6 +134,7 @@ export interface HubStartRequest {
 	lessonId?: string;
 	topicId?: string;
 	planId?: string;
+	milestoneId?: string;
 	/** Title for the new session. */
 	title: string;
 	/** Opening message used when the hub start endpoint is unavailable. */
@@ -170,6 +174,7 @@ export async function startHubSession(req: HubStartRequest): Promise<string> {
 		...(start.lessonId ? { lessonId: start.lessonId } : {}),
 		...(start.topicId ? { topicId: start.topicId } : {}),
 		...(start.planId ? { planId: start.planId } : {}),
+		...(start.milestoneId ? { milestoneId: start.milestoneId } : {}),
 	};
 	const created = await fetch("/api/chats", {
 		method: "POST",

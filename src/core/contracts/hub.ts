@@ -4,7 +4,7 @@
  * back to the hub through ChatRecord.origin; the hub never stores chat ids.
  */
 
-export const HUB_MODES = ["ask", "explain", "deep-dive", "practice"] as const;
+export const HUB_MODES = ["ask", "explain", "deep-dive", "practice", "plan"] as const;
 export type HubMode = (typeof HUB_MODES)[number];
 
 /** Where a session came from in the hub. Absent on chats started outside it. */
@@ -13,6 +13,8 @@ export interface SessionOrigin {
 	lessonId?: string;
 	topicId?: string;
 	planId?: string;
+	/** Set on sessions started from one milestone of `planId`. */
+	milestoneId?: string;
 	/** True when the hub judged the learner's evidence fresh enough to skip probing. */
 	skipProbe?: boolean;
 }
@@ -49,9 +51,15 @@ export interface HubLesson {
 	updatedAt: string;
 }
 
+/**
+ * One stage of a plan, and a small hub of its own: a goal plus the topics
+ * (with all their lessons) and any hand-picked lessons that reach it.
+ */
 export interface HubMilestone {
 	id: string;
 	title: string;
+	goal?: string;
+	topicIds: string[];
 	lessonIds: string[];
 }
 
@@ -132,11 +140,21 @@ export interface LessonProgress {
 	total: number;
 }
 
+export interface MilestoneProgress {
+	solid: number;
+	total: number;
+	/** First lesson of the milestone that is not complete. */
+	nextLessonId: string | null;
+	/** True when the milestone has lessons and all of them are complete. */
+	complete: boolean;
+}
+
 export interface PlanProgress {
 	solid: number;
 	total: number;
 	/** First lesson in milestone order that is not complete. */
 	nextLessonId: string | null;
+	milestones: Record<string, MilestoneProgress>;
 }
 
 export interface HubMastery {

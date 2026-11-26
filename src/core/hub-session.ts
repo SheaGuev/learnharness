@@ -72,6 +72,8 @@ export interface SessionBrief {
 	goal: string;
 	lessonTitle?: string;
 	topicTitle?: string;
+	planTitle?: string;
+	milestoneTitle?: string;
 	probe: boolean;
 	probeReason: ProbeReason;
 	concepts: SessionBriefConcept[];
@@ -82,6 +84,7 @@ const MODE_LABELS: Record<HubMode, string> = {
 	explain: "Explain",
 	"deep-dive": "Deep dive",
 	practice: "Practice",
+	plan: "Plan",
 };
 
 function modeRules(brief: SessionBrief): string {
@@ -96,6 +99,11 @@ function modeRules(brief: SessionBrief): string {
 				: "The learner's state below is recent, so there is no probe: plan from it and teach step by step with checks.";
 		case "practice":
 			return "Set practice problems on the concepts below, weighted toward shaky, gap and review-due ones.";
+		case "plan":
+			if (brief.milestoneTitle) return "Revise one milestone of an existing plan with the learner: its goal, topics and lessons. Keep the plan's other milestones as they are.";
+			return brief.planTitle
+				? "Revise an existing plan with the learner. Find out what should change, then save the revised plan."
+				: "Find out what the learner wants to achieve, then build a plan with them and save it to the hub.";
 	}
 }
 
@@ -117,6 +125,7 @@ export function sessionBriefText(brief: SessionBrief): string {
 		"",
 		`Mode: ${MODE_LABELS[brief.mode]}. ${modeRules(brief)}`,
 	];
+	if (brief.planTitle) lines.push(`Plan: ${brief.planTitle}${brief.milestoneTitle ? ` (milestone: ${brief.milestoneTitle})` : ""}`);
 	if (brief.lessonTitle) lines.push(`Lesson: ${brief.lessonTitle}${brief.topicTitle ? ` (topic: ${brief.topicTitle})` : ""}`);
 	else if (brief.topicTitle) lines.push(`Topic: ${brief.topicTitle}`);
 	lines.push(`Goal: ${brief.goal}`);

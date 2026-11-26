@@ -27,7 +27,12 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 	const rendering = resolveSettings(record ?? null).graph.rendering;
 	const topic = param(params, "topic");
 	const plan = param(params, "plan");
-	const hubNav: HubNav = topic ? { screen: "topic", id: topic } : plan ? { screen: "plan", id: plan } : { screen: "home" };
+	const milestone = param(params, "milestone");
+	const hubNav: HubNav = topic
+		? { screen: "topic", id: topic }
+		: plan && milestone
+			? { screen: "milestone", planId: plan, id: milestone }
+			: plan ? { screen: "plan", id: plan } : { screen: "home" };
 	return (
 		<Home
 			initialConfigured={slotsConfigured(record?.models)}
