@@ -759,7 +759,7 @@ export async function handleChatInput(
 	const constructed: TeachingAgent = buildAgent
 		? buildAgent({ ...agentOpts, teaching })
 		: agentKind === "tutor"
-			? createTutorAgent(agentOpts)
+			? createTutorAgent({ chatId, chatStore: stores.chatStore }, agentOpts)
 		: agentKind === "practice"
 			? createPracticeAgent(
 					{

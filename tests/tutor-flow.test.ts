@@ -34,6 +34,7 @@ const { runningTurn } = await import("../src/server/turn-runs.ts");
 const { chatStore } = await import("../src/store/chats.ts");
 const { composeInstructions, createTutorAgent } = await import("../src/agent/teacher-agent.ts");
 const { danglingQuestionOf } = await import("../src/core/native-messages.ts");
+const { hubStore } = await import("../src/store/hub.ts");
 
 type TeachingAgent = import("../src/agent/teacher-agent.ts").TeachingAgent;
 
@@ -68,11 +69,11 @@ async function drainTurn(chatId: string, input: unknown, factory: Parameters<typ
 	if (handle) await new Response(handle.subscribe()).text();
 }
 
-async function startAsk(topicId: string): Promise<string> {
+async function startAsk(topicId: string, lessonId?: string): Promise<string> {
 	const res = await postHubStart(new Request("http://test/api/hub/start", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ mode: "ask", topicId, prompt: "What does a write-back cache defer?" }),
+		body: JSON.stringify({ mode: "ask", topicId, ...(lessonId ? { lessonId } : {}), prompt: "What does a write-back cache defer?" }),
 	}));
 	assert.equal(res.status, 200);
 	const body: unknown = await res.json();
@@ -88,7 +89,7 @@ function tutorFactory(chatId: string, engine: PiEngine, built: TeachingAgent[]):
 		const record = chatStore.getChat(chatId);
 		assert.ok(record);
 		assert.equal(sessionAgentKind({ ...record, messages: record.messages }), "tutor");
-		const agent = createTutorAgent({ engine, messages: opts.messages });
+		const agent = createTutorAgent({ chatId, chatStore }, { engine, messages: opts.messages });
 		built.push(agent);
 		return agent;
 	};
@@ -137,5 +138,29 @@ describe("Ask sessions run the tutor", () => {
 		await drainTurn(id, { type: "text", text: "How does the cache handle writes?" }, tutorFactory(id, engine, []));
 		const messages = chatStore.getChat(id)?.messages ?? [];
 		assert.equal(danglingQuestionOf(messages)?.toolCallId, "call-ask-1");
+	});
+
+	it("a lesson Ask can report_outcome; a topic-only Ask never sees it", async () => {
+		const lesson = applyHubEdit({
+			type: "lesson.create", topicId, title: "Write policies", goal: "Pick a write policy",
+			concepts: [{ title: "Write-back" }],
+		});
+		assert.ok(lesson.createdId);
+		const id = await startAsk(topicId, lesson.createdId);
+		assert.equal(chatStore.getChat(id)?.origin?.lessonId, lesson.createdId);
+		const { engine } = scripted([
+			() => fauxAssistantMessage([fauxToolCall("report_outcome", {
+				summary: "Asked how write-back defers writes.",
+				concepts: [],
+				explore: [{ title: "Cache coherence", why: "Asked what happens when two cores hold the line." }],
+			}, { id: "call-outcome-1" })], { stopReason: "toolUse" }),
+			() => fauxAssistantMessage([fauxText("Coherence protocols handle that; an Explain session covers it.")]),
+		]);
+		const built: TeachingAgent[] = [];
+		await drainTurn(id, { type: "text", text: "Thanks, that's all." }, tutorFactory(id, engine, built));
+
+		assert.ok(built[0]?.state.tools.some((t) => t.name === "report_outcome"));
+		assert.ok(hubStore.read().explore.some((item) => item.title === "Cache coherence"));
+		assert.equal(hubStore.readEvidence().filter((e) => e.chatId === id).length, 0, "no concept evidence from an empty concepts list");
 	});
 });
