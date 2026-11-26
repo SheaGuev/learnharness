@@ -505,7 +505,7 @@ describe("test isolation (the suite must never touch real user data)", () => {
 
 describe("Tutor (Ask) prompt composition and settings", () => {
 	const TUTOR_PATHS = [
-		"tutor/00-base.md",
+		"tutor/00-base.md", "tutor/10-hub-outcome.md",
 		"shared/10-voice.md", "shared/15-accuracy.md", "shared/30-learner-files.md", "shared/35-side-conversations.md", "shared/40-formatting.md",
 	];
 
@@ -547,7 +547,7 @@ describe("Tutor (Ask) prompt composition and settings", () => {
 		for (const kind of ["teacher", "prober", "practice"] as const) {
 			assert.equal(teacherAgent.composeInstructions(kind, switches), defaults[kind]);
 		}
-		const agent = teacherAgent.createTutorAgent({ engine: fauxEngine(), promptSwitches: switches });
+		const agent = teacherAgent.createTutorAgent(undefined, { engine: fauxEngine(), promptSwitches: switches });
 		assert.ok(agent.state.systemPrompt.startsWith(text), "a tutor turn composes the enabled override");
 		assert.equal((await deleteSegment(segment.split("/"))).status, 200);
 		assert.equal(teacherAgent.composeInstructions("tutor", readSettingsRecord()?.agent?.prompts ?? {}), defaults.tutor);

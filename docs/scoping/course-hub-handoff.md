@@ -33,7 +33,7 @@ The combined test set (23 files, 395 tests) passes, and typecheck and lint are c
 - **Gaps:**
   - The lesson card has no Explain or Ask buttons, so both modes are only reachable through the API.
   - An API Ask start uses `prompt` as the chat title but doesn't send it as the first message.
-  - `report_outcome` is registered for the teacher and prober, not the tutor.
+  - `report_outcome` reaches the tutor only in lesson-linked Asks (a topic-only Ask has no lesson to record against). Its prompt (`tutor/10-hub-outcome.md`) never marks a concept solid and mainly sends explore items and deeper dives.
 - **Next tasks:** Explain/Ask entry points in the hub UI (with the Ask question sent as the first message), then T6 (planner and explore queue).
 - **Dev-browser gotcha:** a browser-pane tab that has been navigated many times can get stuck in a reload loop (`[HMR] connected` → `[Fast Refresh] rebuilding` → reload) even though no files change. A fresh tab loads normally.
 - **Type-check gotcha:** with the `session-brief` marker in the message union, `capturePluginSessionView` hit TS2589 (instantiation too deep). It now widens through `unknown`, like its other branch (`src/core/plugin-view-context.ts`). Expect this class of error when adding message types.

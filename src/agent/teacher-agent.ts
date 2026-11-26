@@ -15,7 +15,7 @@ import {
 	type TeacherToolContext,
 } from "./tools.ts";
 import { practiceTools, createPracticeGate, type PracticeGate, type PracticeToolContext } from "./tools/practice.ts";
-import { createTutorTools } from "./tools/tutor.ts";
+import { createTutorTools, type TutorToolContext } from "./tools/tutor.ts";
 import { createPlannerTools } from "./tools/planner.ts";
 import type { ChatStore } from "../core/ports.ts";
 import { pluginProblemTools, isPluginProblemPoseAcknowledgment, type NativePluginProblemContribution } from "./plugin-problem-tools.ts";
@@ -417,10 +417,11 @@ export function createPracticeAgent(ctx: PracticeToolContext, opts: AgentBuildOp
  * The TUTOR (Ask sessions): built from turn 1 of a kind:"tutor" session.
  * Answer-first, no probe/plan/quiz tools; its registry is the learner-file
  * set plus ask_user_question, whose clean pose ends the run like any
- * question tool's.
+ * question tool's, and report_outcome in lesson-linked chats. Optional ctx
+ * so tests can build a bare tutor with no storage wiring.
  */
-export function createTutorAgent(opts: AgentBuildOptions = {}) {
-	return baseAgentOptions("tutor", opts, Object.values(opts.tools ?? createTutorTools()));
+export function createTutorAgent(ctx?: TutorToolContext, opts: AgentBuildOptions = {}) {
+	return baseAgentOptions("tutor", opts, Object.values(opts.tools ?? createTutorTools(ctx)));
 }
 
 /**

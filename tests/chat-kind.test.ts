@@ -199,7 +199,7 @@ describe("agent routing by session kind", () => {
 	it("the tutor's registry has no probe, plan, quiz or job tools, and plugins never extend it", () => {
 		let contributionCalls = 0;
 		const faux = createFauxCore({});
-		const agent = createTutorAgent({
+		const agent = createTutorAgent(undefined, {
 			engine: { model: faux.getModel(), streamFn: faux.streamSimple },
 			chatId: "chat_tutor",
 			pluginContributions: () => {
@@ -214,7 +214,7 @@ describe("agent routing by session kind", () => {
 
 	it("Claude models get send_to_user so the answer isn't folded into thinking", () => {
 		const faux = createFauxCore({});
-		const agent = createTutorAgent({ engine: { model: { ...faux.getModel(), id: "claude-faux" }, streamFn: faux.streamSimple } });
+		const agent = createTutorAgent(undefined, { engine: { model: { ...faux.getModel(), id: "claude-faux" }, streamFn: faux.streamSimple } });
 		assert.ok(agent.state.tools.some((t) => t.name === "send_to_user"));
 	});
 });
